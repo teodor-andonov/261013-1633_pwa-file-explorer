@@ -256,10 +256,10 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     $('files-area').dataset.view=state.view;
     for(const view of views){
       const b=document.querySelector(`[data-action="view-${view}"]`);
-      if(b){b.classList.toggle('pressed',state.view===view);b.setAttribute('aria-pressed',String(state.view===view));}
+      if(b){if(!b.querySelector('svg'))b.innerHTML=svg(view);b.classList.toggle('pressed',state.view===view);b.setAttribute('aria-pressed',String(state.view===view));}
     }
     const b=document.querySelector('[data-action="group-menu"]');
-    if(b){b.classList.toggle('pressed',state.group!=='none');b.title=`Group: ${state.group}`;}
+    if(b){if(!b.querySelector('svg'))b.innerHTML=svg('group');b.classList.toggle('pressed',state.group!=='none');b.title=`Group: ${state.group}`;}
   }
   renderVirtual = function(){
     updateViewButtons();
@@ -331,7 +331,36 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
       };
       const bar=document.createElement('div');bar.className='preview-toolstrip';bar.append(button);editor.before(bar);
     }
+    if($('preview-editor')&&ext(e.name)!=='md'){
+      const editor=$('preview-editor'),bar=document.createElement('div');
+      bar.className='preview-toolstrip';
+      const button=document.createElement('button');
+      button.className='tool-button';button.innerHTML=svg('preview');
+      button.title='Toggle code preview';button.setAttribute('aria-label','Toggle code preview');
+      button.onclick=()=>{
+        const previous=host.querySelector('.code-render');
+        if(previous){previous.remove();editor.hidden=false;button.classList.remove('pressed');return;}
+        const pre=document.createElement('pre');pre.className='code-render';
+        pre.innerHTML=highlightSource(editor.value);
+        editor.after(pre);editor.hidden=true;button.classList.add('pressed');
+      };
+      bar.append(button);editor.before(bar);
+    }
   };
+  function highlightSource(text){
+    const source=text.length>250000?text.slice(0,250000)+'\n… preview truncated':text;
+    const re=/(\\"(?:\\\\.|[^\\"\\\\])*\\"|'(?:\\\\.|[^'\\\\])*'|\/\/[^\\n]*|#[^\\n]*|\\b(?:const|let|var|function|return|class|import|from|export|def|if|else|elif|for|while|in|try|except|async|await|true|false|null|None|True|False)\\b|\\b\\d+(?:\\.\\d+)?\\b)/g;
+    let out='',last=0,match;
+    while((match=re.exec(source))){
+      out+=escapeHTML(source.slice(last,match.index));
+      const part=match[0];
+      const cls=part.startsWith('//')||part.startsWith('#')?'comment':
+        part.startsWith('"')||part.startsWith("'")?'string':/^\d/.test(part)?'number':'keyword';
+      out+='<span class="token-'+cls+'">'+escapeHTML(part)+'</span>';
+      last=re.lastIndex;
+    }
+    return out+escapeHTML(source.slice(last));
+  }
   function renderSimpleMarkdown(input){
     const lines=escapeHTML(input).split(/\r?\n/);
     let code=false;

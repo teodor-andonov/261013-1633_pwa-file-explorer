@@ -533,8 +533,6 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     }
     return baseAct(action);
   };
-  const formerBlankMenu=blankMenu;
-  blankMenu=undefined; // contextual menu below is added by a DOM capture handler, leaving the original const undisturbed.
   document.addEventListener('click',e=>{
     const tool=e.target.closest('[data-anno-tool]');
     if(tool&&annotation){

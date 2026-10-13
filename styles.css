@@ -91,3 +91,12 @@
 :root[data-theme="dark"] .token-keyword{color:#c4a8f1}
 :root[data-theme="dark"] .token-string{color:#8aceb4}
 :root[data-theme="dark"] .token-number{color:#dfac73}
+
+
+/* Less duplicate chrome; retain labels in tooltips and accessibility text. */
+.files-top .heading{display:none}
+.files-top .file-count{margin-right:auto}
+.preview-actions{gap:5px}
+.preview-actions .tool-button{height:30px;width:31px;display:grid;place-items:center;padding:0;border-radius:7px}
+.preview-actions .tool-button svg{width:16px;height:16px}
+.preview-details dt:nth-of-type(3),.preview-details dd:nth-of-type(3){display:none}

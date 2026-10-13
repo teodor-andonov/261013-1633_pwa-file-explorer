@@ -14,14 +14,14 @@
   <div id="app" class="app">
     <aside class="sidebar" aria-label="Folder tabs">
       <div class="sidebar-top">
-        <div class="brand"><span class="brand-mark" aria-hidden="true">▤</span><span>fold</span><span class="brand-dot">.</span></div>
+        <div class="brand" aria-label="Fold"><span class="brand-mark" aria-hidden="true">▤</span></div>
         <button class="icon-button" data-action="add-root" title="Add folder" aria-label="Add folder">+</button>
       </div>
-      <div class="sidebar-label">FOLDERS</div>
+      
       <nav id="roots" class="roots" aria-label="Open folders"></nav>
       <div class="sidebar-foot">
         <button data-action="theme" class="side-button" id="theme-button" title="Toggle appearance"></button>
-        <button data-action="shortcuts" class="side-button" title="Keyboard shortcuts"><span class="side-symbol">?</span><span>Shortcuts</span></button>
+        <button data-action="shortcuts" class="side-button" title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><span class="side-symbol">?</span></button>
       </div>
     </aside>
     <section class="workspace">
@@ -41,13 +41,26 @@
       </header>
       <div class="workspace-body">
         <main class="files-area" id="files-area">
-          <div class="files-top"><div class="heading" id="folder-title">Files</div><div class="file-count" id="file-count"></div><div class="files-actions"><button class="quiet-button" data-action="new-folder" title="New folder (Ctrl+Shift+N)"><span id="folder-plus-icon"></span> New folder</button><button class="quiet-button" data-action="import" title="Import files"><span id="import-icon"></span> Import</button></div></div>
+          <div class="files-top">
+            <div class="heading" id="folder-title">Files</div><div class="file-count" id="file-count"></div>
+            <div class="files-actions">
+              <div class="view-controls" role="group" aria-label="File layout">
+                <button class="tool-button" data-action="view-list" title="List" aria-label="List view">≡</button>
+                <button class="tool-button" data-action="view-table" title="Table" aria-label="Table view">▤</button>
+                <button class="tool-button" data-action="view-gallery" title="Gallery with thumbnails" aria-label="Gallery view">▦</button>
+              </div>
+              <button class="tool-button" data-action="group-menu" title="Group" aria-label="Group files">⊞</button>
+              <span class="action-divider"></span>
+              <button class="tool-button" data-action="import" title="Import files" aria-label="Import files"><span id="import-icon"></span></button>
+              <button class="tool-button add-item" data-action="new-menu" title="Create new…" aria-label="Create file or folder">+</button>
+            </div>
+          </div>
           <div class="list-head" id="list-head"><button data-sort="name">Name <span data-sort-arrow="name"></span></button><button data-sort="type">Type <span data-sort-arrow="type"></span></button><button data-sort="size">Size <span data-sort-arrow="size"></span></button><button data-sort="modified">Modified <span data-sort-arrow="modified"></span></button></div>
           <div class="file-scroller" id="file-scroller" tabindex="0" aria-label="File list"><div id="file-rows"></div></div>
           <div class="drop-indicator" id="drop-indicator">Drop files to import</div>
         </main>
         <aside class="preview" id="preview" aria-label="File preview">
-          <div class="preview-top"><span>PREVIEW</span><button class="icon-button small" data-action="close-preview" title="Close preview" aria-label="Close preview">×</button></div>
+          <div class="preview-top"><span></span><button class="icon-button small" data-action="close-preview" title="Close preview" aria-label="Close preview">×</button></div>
           <div id="preview-content" class="preview-content"></div>
         </aside>
       </div>

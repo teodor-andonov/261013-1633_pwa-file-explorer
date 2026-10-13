@@ -349,7 +349,7 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
   };
   function highlightSource(text){
     const source=text.length>250000?text.slice(0,250000)+'\n… preview truncated':text;
-    const re=/(\\"(?:\\\\.|[^\\"\\\\])*\\"|'(?:\\\\.|[^'\\\\])*'|\/\/[^\\n]*|#[^\\n]*|\\b(?:const|let|var|function|return|class|import|from|export|def|if|else|elif|for|while|in|try|except|async|await|true|false|null|None|True|False)\\b|\\b\\d+(?:\\.\\d+)?\\b)/g;
+    const re=/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/[^\n]*|#[^\n]*|\b(?:const|let|var|function|return|class|import|from|export|def|if|else|elif|for|while|in|try|except|async|await|true|false|null|None|True|False)\b|\b\d+(?:\.\d+)?\b)/g;
     let out='',last=0,match;
     while((match=re.exec(source))){
       out+=escapeHTML(source.slice(last,match.index));

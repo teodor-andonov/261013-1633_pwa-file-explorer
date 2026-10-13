@@ -1,0 +1,28 @@
+name: Restore Fold source
+on:
+  push:
+    paths:
+      - ".release/payload/ready"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .release/payload/part-*.txt | base64 -d > /tmp/fold-source.tar.xz
+          mkdir -p /tmp/fold-source
+          tar -xJf /tmp/fold-source.tar.xz -C /tmp/fold-source --strip-components=1
+          cp -a /tmp/fold-source/. .
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md index.html app.js styles.css sw.js manifest.webmanifest icons/
+          if ! git diff --cached --quiet; then
+            git commit -m "Add Fold explorer PWA source"
+            git push
+          fi

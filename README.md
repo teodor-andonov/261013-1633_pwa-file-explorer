@@ -18,7 +18,12 @@ For local development, run `python -m http.server 8000` from this directory and 
 - Virtualized, sorted file list; quick in-folder filtering; lazy file-size/date metadata
 - Keyboard and mouse multi-selection, standard keyboard shortcuts and custom right-click menus
 - New files/folders, rename, import/drag-and-drop, copy, cut, paste, duplicate via copy/paste, permanent delete
-- Image, PDF, audio, video and text previews; edit/save text up to 2 MB
+- Compact icon-first UI with **List**, **Table**, and thumbnail **Gallery** views
+- Optional grouping by **type** or **date**; lazy-loading thumbnails, capped gallery batches
+- Preview JPG/PNG/WebP/GIF/SVG images, PDF, audio and video, plus code and text with a read-only syntax-coloured view
+- Edit/save TXT, MD, JSON, JS, TS, Python, HTML, CSS and other plain-text/code files (up to 2 MB); Markdown has a simple rendered preview; SVG source can be edited
+- Create Markdown/text files (choose a `.txt` name for TXT) and blank white **1600 × 900 JPG** images
+- Annotate raster images with pen, marker, shapes, text and eraser; undo and **Save copy** export as PNG, without overwriting the source
 - Light/dark mode, standalone install, offline shell, network-first app updates
 - No analytics, server, third-party scripts, bundler or runtime dependencies
 
@@ -29,7 +34,7 @@ For local development, run `python -m http.server 8000` from this directory and 
 - **Internal clipboard only.** Ctrl+C / Ctrl+X / Ctrl+V work between Fold folders/tabs, not the Windows/Explorer clipboard.
 - **Delete is permanent.** `removeEntry` does **not** send files to the Recycle Bin. This is why Fold requires explicit confirmation and labels the action accordingly.
 - **Rename/move can be copy-then-delete.** Native filesystem move/rename isn't generally supported for local directories; Fold copies, then removes the original only after a successful copy. This may be slow for very large folder trees. If copy succeeds but removal fails, both copies can remain.
-- File metadata (size/modified) is read lazily. Some files can be inaccessible because of Windows locks or browser safeguards. Web-based previews cannot display every proprietary format.
+- The image annotator currently saves a flattened annotated PNG copy. It is not a layered editor, and very large images may exhaust browser canvas memory. File metadata (size/modified) is read lazily. Some files can be inaccessible because of Windows locks or browser safeguards. Web-based previews cannot display every proprietary format.
 - Folder access uses `showDirectoryPicker({ mode: 'readwrite' })`, which is Chromium-specific and requires HTTPS or localhost.
 - GitHub Pages serves the **app code only**. Your Windows folder contents are accessed directly by the browser's local API; they are not added to Git or sent to GitHub.
 
@@ -48,7 +53,10 @@ For local development, run `python -m http.server 8000` from this directory and 
 | Alt+↑ | Parent folder |
 | / | Focus quick filter |
 | F5 | Refresh |
-| Escape | Clear selection / filter |
+| Escape | Clear selection / filter / close annotation editor |
+| Ctrl+Z (image annotation) | Undo last annotation |
+| Ctrl+S (text editor) | Save edited file |
+| Tab (text editor) | Insert two spaces |
 
 ## Publishing
 

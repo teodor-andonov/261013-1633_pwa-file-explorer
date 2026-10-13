@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f7f5">
+  <meta name="description" content="A quiet, fast file explorer for Chrome and Edge on Windows.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Fold — file explorer</title>
+</head>
+<body>
+  <div id="app" class="app">
+    <aside class="sidebar" aria-label="Folder tabs">
+      <div class="sidebar-top">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">▤</span><span>fold</span><span class="brand-dot">.</span></div>
+        <button class="icon-button" data-action="add-root" title="Add folder" aria-label="Add folder">+</button>
+      </div>
+      <div class="sidebar-label">FOLDERS</div>
+      <nav id="roots" class="roots" aria-label="Open folders"></nav>
+      <div class="sidebar-foot">
+        <button data-action="theme" class="side-button" id="theme-button" title="Toggle appearance"></button>
+        <button data-action="shortcuts" class="side-button" title="Keyboard shortcuts"><span class="side-symbol">?</span><span>Shortcuts</span></button>
+      </div>
+    </aside>
+    <section class="workspace">
+      <header id="toolbar" class="toolbar">
+        <div class="nav-buttons">
+          <button class="tool-button" data-action="back" title="Back (Alt+Left)" aria-label="Back"></button>
+          <button class="tool-button" data-action="forward" title="Forward (Alt+Right)" aria-label="Forward"></button>
+          <button class="tool-button" data-action="up" title="Parent folder (Alt+Up)" aria-label="Parent folder"></button>
+        </div>
+        <div class="breadcrumbs" id="breadcrumbs" aria-label="Current folder"></div>
+        <div class="toolbar-right">
+          <label class="search-box" id="search-box"><span id="search-icon"></span><input id="search" aria-label="Filter files" autocomplete="off" spellcheck="false" placeholder="Filter files  /" type="search"></label>
+          <button class="tool-button" data-action="refresh" title="Refresh (F5)" aria-label="Refresh" id="refresh-button"></button>
+          <button class="tool-button" data-action="toggle-preview" title="Toggle preview (Space)" aria-label="Toggle preview" id="preview-toggle"></button>
+          <button class="tool-button" data-action="more" title="More actions" aria-label="More actions" id="more-button"></button>
+        </div>
+      </header>
+      <div class="workspace-body">
+        <main class="files-area" id="files-area">
+          <div class="files-top"><div class="heading" id="folder-title">Files</div><div class="file-count" id="file-count"></div><div class="files-actions"><button class="quiet-button" data-action="new-folder" title="New folder (Ctrl+Shift+N)"><span id="folder-plus-icon"></span> New folder</button><button class="quiet-button" data-action="import" title="Import files"><span id="import-icon"></span> Import</button></div></div>
+          <div class="list-head" id="list-head"><button data-sort="name">Name <span data-sort-arrow="name"></span></button><button data-sort="type">Type <span data-sort-arrow="type"></span></button><button data-sort="size">Size <span data-sort-arrow="size"></span></button><button data-sort="modified">Modified <span data-sort-arrow="modified"></span></button></div>
+          <div class="file-scroller" id="file-scroller" tabindex="0" aria-label="File list"><div id="file-rows"></div></div>
+          <div class="drop-indicator" id="drop-indicator">Drop files to import</div>
+        </main>
+        <aside class="preview" id="preview" aria-label="File preview">
+          <div class="preview-top"><span>PREVIEW</span><button class="icon-button small" data-action="close-preview" title="Close preview" aria-label="Close preview">×</button></div>
+          <div id="preview-content" class="preview-content"></div>
+        </aside>
+      </div>
+      <footer class="status"><span id="status-left">Add a folder to get started</span><span id="status-right"></span></footer>
+    </section>
+  </div>
+  <div id="context" class="context" role="menu" hidden></div>
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="upload-input" multiple hidden>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

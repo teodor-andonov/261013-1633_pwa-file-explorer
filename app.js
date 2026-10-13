@@ -612,6 +612,29 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
       state.galleryLimit+=160;renderVirtual();
     }
   },{passive:true});
+  // Don't silently drop local edits when switching folders or opening another file.
+  const dirtyEditor=()=>Boolean($('preview-editor')&&$('preview-save')&&!$('preview-save').disabled);
+  const unsafeAction=new Set(['back','forward','up','refresh','close-preview','toggle-preview','rename','delete','import','add-root','close-root','open-selected']);
+  document.addEventListener('click',event=>{
+    if(!dirtyEditor())return;
+    const row=event.target.closest('[data-row],[data-root],[data-close],[data-crumb]');
+    const action=event.target.closest('[data-action]')?.dataset.action;
+    if(!row&&!unsafeAction.has(action))return;
+    if(window.confirm('Discard unsaved text changes?'))return;
+    event.preventDefault();event.stopImmediatePropagation();
+  },true);
+  document.addEventListener('keydown',event=>{
+    if(!dirtyEditor())return;
+    if(event.target.closest('input,textarea,[contenteditable="true"]'))return;
+    const key=event.key;
+    if(!(key==='Enter'||key==='F5'||key==='Escape'||key===' '||(event.altKey&&['ArrowUp','ArrowLeft','ArrowRight'].includes(key))))return;
+    if(window.confirm('Discard unsaved text changes?'))return;
+    event.preventDefault();event.stopImmediatePropagation();
+  },true);
+  window.addEventListener('beforeunload',event=>{
+    if(!dirtyEditor())return;
+    event.preventDefault();event.returnValue='';
+  });
   // Restore footer-free UI and the chosen view immediately.
   updateViewButtons();
 })();

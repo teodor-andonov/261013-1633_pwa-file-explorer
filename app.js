@@ -308,8 +308,15 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     await baseRenderPreview();
     if(!state.previewOpen)return;
     const e=chosen();
-    if(!e||e.handle.kind!=='file')return;
     const host=$('preview-content');
+    host.querySelectorAll('.preview-actions button').forEach(button=>{
+      const action=button.dataset.action;
+      const label=button.textContent.trim();
+      button.classList.add('tool-button');
+      button.title=label;button.setAttribute('aria-label',label);
+      button.innerHTML=svg(action==='download'?'download':action==='rename'?'edit':'folder');
+    });
+    if(!e||e.handle.kind!=='file')return;
     if(!host.querySelector('.preview-name'))return;
     const visual=host.querySelector('.preview-visual');
     if(markableImage(e.name)&&visual){

@@ -98,7 +98,7 @@ async function uniqueName(dir,requested){
     name=`${stem} (${index++})${suffix}`;
   }
 }
-async function createNew(kindToCreate){if(!state.dir)return;const initial=kindToCreate==='directory'?'New folder':'Untitled.txt';const name=(await modal({title:`New ${kindToCreate==='directory'?'folder':'file'}`,value:initial}))?.trim();if(name==null)return;if(!filenameOK(name)){notify('Invalid Windows filename.');return;}try{if(await uniqueName(state.dir,name)!==name){notify('A file or folder already has that name.');return;}if(kindToCreate==='directory')await state.dir.getDirectoryHandle(name,{create:true});else{const handle=await state.dir.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.close();}await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}catch(e){notify(`Creation failed: ${e.message}`);}}
+async function createNew(kindToCreate){if(!state.dir)return;const initial=kindToCreate==='directory'?'New folder':'Untitled.md';const name=(await modal({title:`New ${kindToCreate==='directory'?'folder':'file'}`,value:initial}))?.trim();if(name==null)return;if(!filenameOK(name)){notify('Invalid Windows filename.');return;}try{if(await uniqueName(state.dir,name)!==name){notify('A file or folder already has that name.');return;}if(kindToCreate==='directory')await state.dir.getDirectoryHandle(name,{create:true});else{const handle=await state.dir.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.close();}await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}catch(e){notify(`Creation failed: ${e.message}`);}}
 async function copyEntry(source,dest,name){if(source.kind==='file'){const srcFile=await source.getFile();const output=await dest.getFileHandle(name,{create:true});const stream=await output.createWritable();try{await stream.write(srcFile);await stream.close();}catch(e){await stream.abort().catch(()=>{});throw e;}return;}const target=await dest.getDirectoryHandle(name,{create:true});for await(const [childName,child] of source.entries())await copyEntry(child,target,childName);}
 async function isDescendantOf(dest,source){if(source.kind!=='directory')return false;try{return (await source.resolve(dest))!==null;}catch{return false;}}
 async function renameSelected(){const entry=chosen();if(!entry||!state.dir)return;const old=entry.name;const name=(await modal({title:'Rename',value:old,confirm:'Rename',description:'Folder renaming may copy then remove the original. Larger folders can take time.'}))?.trim();if(name==null||name===old)return;if(!filenameOK(name)){notify('Invalid Windows filename.');return;}try{if(await uniqueName(state.dir,name)!==name){notify('That name is already in use.');return;}if(typeof entry.handle.move==='function'){try{await entry.handle.move(name);await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();notify('Renamed');return;}catch(e){if(!['NotSupportedError','InvalidModificationError','NotAllowedError'].includes(e.name))throw e;}}
@@ -112,7 +112,7 @@ async function downloadSelected(){const entry=chosen();if(!entry||entry.handle.k
 async function refreshCurrent(keepSelection=false){const selected=keepSelection?[...state.selected]:[];await showDirectory(false);if(keepSelection){state.selected=new Set(selected.filter(n=>state.entries.some(e=>e.name===n)));renderVirtual();updateStatus();}}
 function menu(items,x,y){const ctx=$('context');ctx.innerHTML=items.map(item=>item.divider?'<div class="menu-divider"></div>':`<button role="menuitem" class="menu-item ${item.danger?'danger':''}" data-menu="${item.action}" ${item.disabled?'disabled':''}>${svg(item.icon||'file')}<span>${escapeHTML(item.label)}</span>${item.key?`<kbd>${escapeHTML(item.key)}</kbd>`:''}</button>`).join('');ctx.hidden=false;const rect=ctx.getBoundingClientRect();ctx.style.left=`${Math.max(8,Math.min(x,innerWidth-rect.width-8))}px`;ctx.style.top=`${Math.max(8,Math.min(y,innerHeight-rect.height-8))}px`;}
 const fileMenu=()=>[{action:'open-selected',icon:'preview',label:'Open / preview',key:'Enter'},{action:'rename',icon:'rename',label:'Rename',key:'F2'}, {divider:true},{action:'copy',icon:'copy',label:'Copy',key:'Ctrl+C'},{action:'cut',icon:'scissors',label:'Cut',key:'Ctrl+X'},{action:'paste',icon:'paste',label:'Paste into current folder',key:'Ctrl+V',disabled:!state.clipboard},{divider:true},{action:'download',icon:'download',label:'Save a copy',disabled:getSelected().length!==1||chosen()?.handle.kind!=='file'},{action:'delete',icon:'trash',label:'Delete permanently',key:'Del',danger:true}];
-const blankMenu=()=>[{action:'new-folder',icon:'plusFolder',label:'New folder',key:'Ctrl+Shift+N'},{action:'new-file',icon:'newFile',label:'New file'}, {action:'import',icon:'upload',label:'Import files'},{divider:true},{action:'paste',icon:'paste',label:'Paste',key:'Ctrl+V',disabled:!state.clipboard},{action:'refresh',icon:'refresh',label:'Refresh',key:'F5'}];
+const blankMenu=()=>[{action:'new-folder',icon:'plusFolder',label:'New folder',key:'Ctrl+Shift+N'},{action:'new-file',icon:'newFile',label:'New Markdown file'}, {action:'import',icon:'upload',label:'Import files'},{divider:true},{action:'paste',icon:'paste',label:'Paste',key:'Ctrl+V',disabled:!state.clipboard},{action:'refresh',icon:'refresh',label:'Refresh',key:'F5'}];
 async function act(action){$('context').hidden=true;switch(action){case 'add-root':return openNewRoot();case 'theme':return setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');case 'grant':return showDirectory(true);case 'refresh':return refreshCurrent(true);case 'back':return navigateDelta(-1);case 'forward':return navigateDelta(1);case 'up':{const r=active();if(r?.path.length)historyTo(r.path.slice(0,-1));return;}case 'new-folder':return createNew('directory');case 'new-file':return createNew('file');case 'import':return $('upload-input').click();case 'rename':return renameSelected();case 'copy':return prepareClipboard(false);case 'cut':return prepareClipboard(true);case 'paste':return pasteClipboard();case 'delete':return deleteSelected();case 'download':return downloadSelected();case 'save-text':return saveText();case 'toggle-preview':state.previewOpen=!state.previewOpen;updatePreviewState();return;case 'close-preview':state.previewOpen=false;updatePreviewState();return;case 'open-selected':{const e=chosen();if(!e)return;const i=state.visible.findIndex(x=>x.name===e.name);if(i>=0)return openIndex(i);return;}case 'more':{const r=$('more-button').getBoundingClientRect();return menu(blankMenu().concat([{divider:true},{action:'select-all',icon:'check',label:'Select all',key:'Ctrl+A'}]),r.left,r.bottom+7);}case 'select-all':state.selected=new Set(state.visible.map(e=>e.name));state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();return;case 'shortcuts':return modal({title:'Keyboard shortcuts',description:'Enter: Open / preview\nSpace: Toggle preview\nF2: Rename\nDelete: Delete permanently\nCtrl+C / X / V: Internal copy, cut, paste\nCtrl+A: Select all\nCtrl+Shift+N: New folder\nAlt+Left / Right / Up: Navigate\n/: Focus filter\nF5: Refresh\nEsc: Clear selection',value:null,confirm:'Close'});}}
 function bindEvents(){document.addEventListener('click',e=>{const menuItem=e.target.closest('[data-menu]');if(menuItem){void act(menuItem.dataset.menu);return;}if(!$('context').contains(e.target))$('context').hidden=true;const close=e.target.closest('[data-close]');if(close){e.stopPropagation();void closeRoot(close.dataset.close);return;}const root=e.target.closest('[data-root]');if(root){void switchRoot(root.dataset.root,true);return;}const crumb=e.target.closest('[data-crumb]');if(crumb){const r=active();if(r)historyTo(r.path.slice(0,Number(crumb.dataset.crumb)));return;}const action=e.target.closest('[data-action]');if(action){void act(action.dataset.action);return;}const row=e.target.closest('[data-row]');if(row){selectIndex(Number(row.dataset.row),{ctrl:e.ctrlKey||e.metaKey,shift:e.shiftKey});return;}if(e.target.closest('#file-scroller')&&state.dir){state.selected.clear();state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();}});
 fileList.addEventListener('dblclick',e=>{const row=e.target.closest('[data-row]');if(row)void openIndex(Number(row.dataset.row));});
@@ -123,4 +123,451 @@ let dragLevel=0;const area=$('files-area');area.addEventListener('dragenter',e=>
 document.querySelector('.roots').addEventListener('keydown',e=>{const root=e.target.closest('[data-root]');if(root&&(e.key==='Enter'||e.key===' ')){e.preventDefault();void switchRoot(root.dataset.root,true);}});
 }
 async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if(!['light','dark'].includes(theme))theme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';setTheme(theme);bindEvents();if(!nativeSupported()){$('folder-title').textContent='Browser access unavailable';$('file-rows').innerHTML=`<div class="empty"><div class="empty-title">Chrome or Edge is required</div><div class="empty-sub">Use this app on Windows over HTTPS (or localhost). Browser file access is not available in this context.</div></div>`;notify('Folder access is not supported in this browser or context.');return;}state.roots=(await getStored('roots')||[]).map(r=>({...r,path:r.path??[],history:r.history??[r.path??[]],pos:r.pos??0}));state.activeId=await getStored('active');if(!state.roots.some(r=>r.id===state.activeId))state.activeId=state.roots[0]?.id??null;await showDirectory(false);if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);}
+(function installFoldFeatures(){
+  // Fold v2: small, composable upgrades to the existing explorer, no runtime dependencies.
+  const views = new Set(['list','table','gallery']);
+  const groups = new Set(['none','type','date']);
+  state.view = views.has(localStorage.getItem('fold-view')) ? localStorage.getItem('fold-view') : 'list';
+  state.group = groups.has(localStorage.getItem('fold-group')) ? localStorage.getItem('fold-group') : 'none';
+  state.galleryLimit = 160;
+  state.thumbnailUrls = new Map();
+  state.layout = null;
+  state.thumbnailObserver = null;
+  icons.list = '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>';
+  icons.table = '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>';
+  icons.gallery = '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.4"/><path d="m3 17 6-6 4 4 3-3 5 5"/>';
+  icons.group = '<path d="M3 5h8v5H3zM13 5h8v5h-8zM3 14h8v5H3zM13 14h8v5h-8z"/>';
+  icons.pen = '<path d="m4 20 4.5-1 11-11-3.5-3.5-11 11L4 20zM14 6l3.5 3.5"/>';
+  icons.marker = '<path d="M4 20h16M6 16 17 5l3 3-11 11H6z"/>';
+  icons.rectangle = '<rect x="4" y="5" width="16" height="14" rx="1"/>';
+  icons.line = '<path d="M4 20 20 4"/>';
+  icons.text = '<path d="M4 6V4h16v2M12 4v16M8 20h8"/>';
+  icons.undo = '<path d="M9 14 4 9l5-5M4 9h10a7 7 0 0 1 0 14"/>';
+  icons.edit = icons.rename;
+  icons.photoPlus = '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 6-6 3 3m2-5h6m-3-3v6"/>';
+  const extensionImage = n => ['png','jpg','jpeg','webp','gif','bmp','avif','svg'].includes(ext(n));
+  const markableImage = n => ['png','jpg','jpeg','webp','bmp','avif'].includes(ext(n));
+  const clearThumbnailCache = () => {
+    state.thumbnailObserver?.disconnect();
+    state.thumbnailObserver=null;
+    for(const url of state.thumbnailUrls.values()) URL.revokeObjectURL(url);
+    state.thumbnailUrls.clear();
+    state.layout=null;
+  };
+  const baseShowDirectory = showDirectory;
+  showDirectory = async function(...args){
+    clearThumbnailCache();
+    state.galleryLimit=160;
+    return baseShowDirectory(...args);
+  };
+  const baseRenderList = renderList;
+  renderList = function(...args){state.layout=null;return baseRenderList(...args);};
+  const bucket = e => {
+    if(e.handle.kind === 'directory') return 'Folders';
+    if(state.group === 'type') {
+      if(extensionImage(e.name)) return 'Images';
+      const icon = fileIcon(e);
+      if(icon==='code') return 'Code & text';
+      if(icon==='pdf') return 'PDF';
+      if(icon==='video') return 'Video';
+      if(icon==='audio') return 'Audio';
+      return kind(e)==='Archive'?'Archives':'Other files';
+    }
+    const t=e.modified;
+    if(!t) return 'No date';
+    const now=new Date(),day=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+    const week=new Date(now.getFullYear(),now.getMonth(),now.getDate()-6).getTime();
+    const month=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+    const year=new Date(now.getFullYear(),0,1).getTime();
+    if(t>=day)return 'Today';
+    if(t>=day-86400000)return 'Yesterday';
+    if(t>=week)return 'Last 7 days';
+    if(t>=month)return 'This month';
+    if(t>=year)return 'This year';
+    return 'Older';
+  };
+  function layoutRows(){
+    if(state.layout?.visible === state.visible && state.layout.group === state.group) return state.layout.rows;
+    const rows=[];
+    if(state.group==='none'){
+      state.visible.forEach((e,index)=>rows.push({index}));
+    } else {
+      const bins=new Map();
+      state.visible.forEach((e,index)=>{
+        const key=bucket(e);
+        if(!bins.has(key)) bins.set(key,[]);
+        bins.get(key).push(index);
+      });
+      const order=state.group==='type'
+        ? ['Folders','Images','Code & text','PDF','Video','Audio','Archives','Other files']
+        : ['Folders','Today','Yesterday','Last 7 days','This month','This year','Older','No date'];
+      for(const label of order) if(bins.has(label)){
+        rows.push({header:label});
+        for(const index of bins.get(label))rows.push({index});
+      }
+    }
+    state.layout={visible:state.visible,group:state.group,rows};
+    return rows;
+  }
+  function fileRow(item){
+    const e=state.visible[item.index],sel=state.selected.has(e.name);
+    return `<div class="file-row${sel?' selected':''}" data-row="${item.index}" role="row" aria-selected="${sel}"><div class="filename">${svg(fileIcon(e))}<span class="name" title="${escapeHTML(e.name)}">${escapeHTML(e.name)}</span></div><div class="detail">${escapeHTML(kind(e))}</div><div class="detail right">${e.handle.kind==='directory'?'—':formatSize(e.size)}</div><div class="detail right">${formatDate(e.modified)}</div></div>`;
+  }
+  function galleryCard(item){
+    const e=state.visible[item.index],sel=state.selected.has(e.name);
+    const showThumb=e.handle.kind==='file'&&extensionImage(e.name);
+    const url=state.thumbnailUrls.get(e.name);
+    return `<div class="gallery-card${sel?' selected':''}" data-row="${item.index}" role="option" aria-selected="${sel}" title="${escapeHTML(e.name)}"><div class="gallery-visual"${showThumb&&!url?` data-thumb="${item.index}"`:''}>${url?`<img alt="" src="${url}" loading="lazy">`:svg(fileIcon(e))}</div><div class="gallery-name">${escapeHTML(e.name)}</div></div>`;
+  }
+  function loadThumbnails(){
+    state.thumbnailObserver?.disconnect();
+    if(state.view!=='gallery')return;
+    const nodes=[...document.querySelectorAll('[data-thumb]')];
+    if(!nodes.length)return;
+    const rootId=state.activeId,dir=state.dir;
+    const observer=new IntersectionObserver(items=>{
+      for(const intersection of items){
+        if(!intersection.isIntersecting)continue;
+        const element=intersection.target;
+        observer.unobserve(element);
+        const index=Number(element.dataset.thumb);
+        const entry=state.visible[index];
+        if(!entry)return;
+        void (async()=>{
+          try {
+            if(state.thumbnailUrls.has(entry.name)){
+              const url=state.thumbnailUrls.get(entry.name);
+              if(element.isConnected)element.innerHTML=`<img alt="" src="${url}" loading="lazy">`;
+              return;
+            }
+            const file=await entry.handle.getFile();
+            if(state.activeId!==rootId||state.dir!==dir||state.view!=='gallery'||!element.isConnected)return;
+            const url=URL.createObjectURL(file);
+            state.thumbnailUrls.set(entry.name,url);
+            element.innerHTML=`<img alt="" src="${url}" loading="lazy">`;
+          }catch(err){console.warn('Thumbnail unavailable',err);}
+        })();
+      }
+    },{root:fileList,rootMargin:'350px'});
+    state.thumbnailObserver=observer;
+    nodes.forEach(el=>observer.observe(el));
+  }
+  function updateViewButtons(){
+    $('files-area').dataset.view=state.view;
+    for(const view of views){
+      const b=document.querySelector(`[data-action="view-${view}"]`);
+      if(b){b.classList.toggle('pressed',state.view===view);b.setAttribute('aria-pressed',String(state.view===view));}
+    }
+    const b=document.querySelector('[data-action="group-menu"]');
+    if(b){b.classList.toggle('pressed',state.group!=='none');b.title=`Group: ${state.group}`;}
+  }
+  renderVirtual = function(){
+    updateViewButtons();
+    if(!state.visible.length||!state.dir)return;
+    const rows=layoutRows(),host=$('file-rows');
+    if(state.view==='gallery'){
+      const count=Math.min(state.galleryLimit,state.visible.length);
+      const parts=['<div class="gallery-layout">'];
+      let opened=false,shown=0;
+      for(const item of rows){
+        if(item.header){
+          if(shown>=count)break;
+          if(opened){parts.push('</div>');opened=false;}
+          parts.push(`<div class="group-title">${escapeHTML(item.header)}</div>`);
+        } else {
+          if(shown>=count)break;
+          if(!opened){parts.push('<div class="gallery-grid">');opened=true;}
+          parts.push(galleryCard(item));shown++;
+        }
+      }
+      if(opened)parts.push('</div>');
+      if(shown<state.visible.length)parts.push(`<div class="gallery-more">${svg('gallery')} ${state.visible.length-shown} more</div>`);
+      parts.push('</div>');
+      host.innerHTML=parts.join('');
+      loadThumbnails();
+      return;
+    }
+    const rowHeight=40,top=fileList.scrollTop,h=fileList.clientHeight||600;
+    const start=Math.max(0,Math.floor(top/rowHeight)-8);
+    const end=Math.min(rows.length,Math.ceil((top+h)/rowHeight)+8);
+    const html=[`<div style="height:${start*rowHeight}px"></div>`];
+    for(let i=start;i<end;i++){
+      const item=rows[i];
+      html.push(item.header?`<div class="group-row">${escapeHTML(item.header)}</div>`:fileRow(item));
+    }
+    html.push(`<div style="height:${(rows.length-end)*rowHeight}px"></div>`);
+    host.innerHTML=html.join('');
+  };
+  // Reuse Fold's existing, permission-aware text editor and media preview.
+  const baseRenderPreview = renderPreview;
+  renderPreview = async function(){
+    await baseRenderPreview();
+    if(!state.previewOpen)return;
+    const e=chosen();
+    if(!e||e.handle.kind!=='file')return;
+    const host=$('preview-content');
+    if(!host.querySelector('.preview-name'))return;
+    const visual=host.querySelector('.preview-visual');
+    if(markableImage(e.name)&&visual){
+      visual.insertAdjacentHTML('afterend',`<div class="preview-toolstrip"><button class="tool-button" data-action="annotate-image" title="Sketch or annotate image" aria-label="Annotate image">${svg('pen')}</button></div>`);
+    }
+    if(ext(e.name)==='svg'&&visual){
+      visual.insertAdjacentHTML('afterend',`<div class="preview-toolstrip"><button class="tool-button" data-action="edit-svg" title="Edit SVG source" aria-label="Edit SVG source">${svg('code')}</button></div>`);
+    }
+    if(ext(e.name)==='md'&&$('preview-editor')){
+      const editor=$('preview-editor');
+      const button=document.createElement('button');
+      button.className='tool-button';
+      button.title='Toggle rendered Markdown';
+      button.setAttribute('aria-label','Toggle rendered Markdown');
+      button.innerHTML=svg('preview');
+      button.onclick=()=>{
+        const existing=host.querySelector('.markdown-render');
+        if(existing){existing.remove();editor.hidden=false;button.classList.remove('pressed');return;}
+        const viewer=document.createElement('div');
+        viewer.className='markdown-render';
+        viewer.innerHTML=renderSimpleMarkdown(editor.value);
+        editor.after(viewer);editor.hidden=true;button.classList.add('pressed');
+      };
+      const bar=document.createElement('div');bar.className='preview-toolstrip';bar.append(button);editor.before(bar);
+    }
+  };
+  function renderSimpleMarkdown(input){
+    const lines=escapeHTML(input).split(/\r?\n/);
+    let code=false;
+    const out=[];
+    const inline=s=>s.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>');
+    for(const line of lines){
+      if(/^```/.test(line)){out.push(code?'</code></pre>':'<pre><code>');code=!code;continue;}
+      if(code){out.push(`${line}\n`);continue;}
+      const heading=line.match(/^(#{1,6})\s+(.+)$/);
+      if(heading){const n=heading[1].length;out.push(`<h${n}>${inline(heading[2])}</h${n}>`);continue;}
+      if(/^[-*]\s+/.test(line)){out.push(`<p class="md-bullet">• ${inline(line.slice(2))}</p>`);continue;}
+      if(/^>\s?/.test(line)){out.push(`<blockquote>${inline(line.replace(/^>\s?/,''))}</blockquote>`);continue;}
+      out.push(line.trim()?`<p>${inline(line)}</p>`:'<div class="md-space"></div>');
+    }
+    if(code)out.push('</code></pre>');
+    return out.join('');
+  }
+  const baseSaveText = saveText;
+  saveText = async function(){
+    const selectedName=chosen()?.name;
+    await baseSaveText();
+    if(state.previewOpen && selectedName && chosen()?.name===selectedName)await renderPreview();
+  };
+  async function editSvg(){
+    const entry=chosen();if(!entry||ext(entry.name)!=='svg')return;
+    const host=$('preview-content');
+    const file=await entry.handle.getFile();
+    if(file.size>5*1024*1024){notify('SVG too large to edit in preview.');return;}
+    const raw=await file.text();
+    const original=host.innerHTML;
+    host.innerHTML=`<textarea id="preview-editor" class="preview-text" spellcheck="false" aria-label="Edit SVG source"></textarea><div class="preview-toolstrip"><button class="tool-button" id="preview-save" data-action="save-text" title="Save SVG" aria-label="Save SVG" disabled>${svg('check')}</button><button class="tool-button" id="close-code-editor" title="Cancel source editing" aria-label="Cancel source editing">${svg('trash')}</button></div>`;
+    $('preview-editor').value=raw;
+    $('preview-editor').addEventListener('input',()=>{$('preview-save').disabled=$('preview-editor').value===raw;});
+    $('close-code-editor').addEventListener('click',()=>{host.innerHTML=original;});
+  }
+  async function createBlankImage(){
+    if(!state.dir){notify('Open a writable folder first.');return;}
+    let name=await modal({title:'New white image · 1600 × 900',value:'Untitled.jpg',confirm:'Create'});
+    if(name===null)return;
+    name=name.trim();
+    if(!/\.jpe?g$/i.test(name)||!filenameOK(name)){notify('Use a valid .jpg filename.');return;}
+    if(await uniqueName(state.dir,name)!==name){notify('That name already exists.');return;}
+    try{
+      const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=900;
+      const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.95));
+      if(!blob)throw Error('Could not encode JPEG.');
+      const handle=await state.dir.getFileHandle(name,{create:true});
+      const writer=await handle.createWritable();await writer.write(blob);await writer.close();
+      await refreshCurrent();const index=state.visible.findIndex(e=>e.name===name);if(index>=0)await openIndex(index);
+      notify('Blank JPG created');
+    }catch(err){console.error(err);notify(`Could not create image: ${err.message}`);}
+  }
+  let annotation=null;
+  async function openAnnotator(){
+    const entry=chosen();
+    if(!entry||!markableImage(entry.name)||!state.dir)return;
+    let url=null;
+    try{
+      const file=await entry.handle.getFile();
+      url=URL.createObjectURL(file);
+      const image=new Image();image.src=url;await image.decode();
+      if(!image.naturalWidth||!image.naturalHeight)throw Error('Could not decode this image.');
+      const maxSide=14000;if(image.naturalWidth>maxSide||image.naturalHeight>maxSide)throw Error('Image is too large for the annotation canvas.');
+      const host=$('modal-root');
+      host.innerHTML=`<div class="annotation-modal" role="dialog" aria-label="Image annotation editor">
+        <div class="annotation-toolbar">
+          <div class="annotation-name" title="${escapeHTML(entry.name)}">${escapeHTML(entry.name)}</div>
+          <div class="annotation-tools">
+            ${[['pen','pen','Pen'],['marker','marker','Highlighter'],['line','line','Line'],['rectangle','rectangle','Rectangle'],['text','text','Text'],['eraser','trash','Erase annotations']].map(([a,icon,label])=>`<button class="tool-button anno-tool ${a==='pen'?'pressed':''}" data-anno-tool="${a}" title="${label}" aria-label="${label}">${svg(icon)}</button>`).join('')}
+            <input id="anno-color" title="Ink colour" aria-label="Ink colour" type="color" value="#ee5145">
+            <input id="anno-width" type="range" min="1" max="18" value="4" title="Pen thickness" aria-label="Pen thickness">
+            <button class="tool-button" data-anno-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo">${svg('undo')}</button>
+          </div>
+          <div class="annotation-controls"><button class="anno-save" data-anno-action="save" title="Save as new PNG">Save copy</button><button class="tool-button" data-anno-action="close" title="Close" aria-label="Close">${svg('trash')}</button></div>
+        </div>
+        <div class="annotation-body"><div class="annotation-frame" id="anno-frame"><img id="anno-image" alt="" src="${url}"><canvas id="anno-canvas" aria-label="Sketch layer"></canvas></div></div>
+        <div class="annotation-hint">Original preserved · saved as PNG</div>
+      </div>`;
+      const sourceImg=$('anno-image');await sourceImg.decode();
+      const canvas=$('anno-canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+      const ctx=canvas.getContext('2d');
+      const ratio=canvas.width/canvas.height;
+      const frame=$('anno-frame');
+      frame.style.aspectRatio=String(ratio);
+      frame.style.width=`min(100%, ${Math.round((window.innerHeight-155)*ratio)}px, ${image.naturalWidth}px)`;
+      annotation={host,canvas,ctx,image,entry,dir:state.dir,tool:'pen',strokes:[],current:null,color:'#ee5145',width:4,url};
+      canvas.addEventListener('pointerdown',annotationPointerDown);
+      canvas.addEventListener('pointermove',annotationPointerMove);
+      canvas.addEventListener('pointerup',annotationPointerUp);
+      canvas.addEventListener('pointercancel',annotationPointerUp);
+      document.addEventListener('keydown',annotationKeys,true);
+    }catch(err){if(url)URL.revokeObjectURL(url);notify(`Annotation unavailable: ${err.message}`);console.error(err);}
+  }
+  function annotationPoint(ev){
+    const rect=annotation.canvas.getBoundingClientRect();
+    return {x:Math.min(annotation.canvas.width,Math.max(0,(ev.clientX-rect.left)*annotation.canvas.width/rect.width)),
+      y:Math.min(annotation.canvas.height,Math.max(0,(ev.clientY-rect.top)*annotation.canvas.height/rect.height))};
+  }
+  function annotationPaint(ctx,s){
+    const scale=Math.max(1,annotation.canvas.width/800);
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=s.color;ctx.fillStyle=s.color;ctx.lineWidth=s.width*scale;
+    if(s.tool==='marker')ctx.globalAlpha=.28;
+    if(s.tool==='eraser')ctx.globalCompositeOperation='destination-out';
+    if(s.tool==='text'){ctx.font=`${Math.round(18*s.width*scale/4)}px "Segoe UI",sans-serif`;ctx.fillText(s.text,s.points[0].x,s.points[0].y);ctx.restore();return;}
+    const p=s.points;if(!p.length){ctx.restore();return;}
+    if(s.tool==='rectangle'){const a=p[0],b=p.at(-1);ctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);}
+    else if(s.tool==='line'){ctx.beginPath();ctx.moveTo(p[0].x,p[0].y);ctx.lineTo(p.at(-1).x,p.at(-1).y);ctx.stroke();}
+    else {ctx.beginPath();ctx.moveTo(p[0].x,p[0].y);if(p.length===1){ctx.lineTo(p[0].x+.01,p[0].y+.01);}else for(const v of p.slice(1))ctx.lineTo(v.x,v.y);ctx.stroke();}
+    ctx.restore();
+  }
+  function annotationRedraw(){
+    if(!annotation)return;
+    const {ctx,canvas}=annotation;ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(const stroke of annotation.strokes)annotationPaint(ctx,stroke);
+    if(annotation.current)annotationPaint(ctx,annotation.current);
+  }
+  async function annotationPointerDown(ev){
+    if(!annotation||ev.button!==0)return;
+    const p=annotationPoint(ev);
+    const a=annotation;
+    if(a.tool==='text'){
+      const text=window.prompt('Annotation text');
+      if(text?.trim()){a.strokes.push({tool:'text',points:[p],color:a.color,width:a.width,text:text.slice(0,250)});annotationRedraw();}
+      return;
+    }
+    a.current={tool:a.tool,color:a.color,width:a.width,points:[p]};
+    a.canvas.setPointerCapture(ev.pointerId);
+    annotationRedraw();
+  }
+  function annotationPointerMove(ev){
+    const a=annotation;
+    if(!a?.current)return;
+    const p=annotationPoint(ev);
+    if(['line','rectangle'].includes(a.current.tool))a.current.points=[a.current.points[0],p];
+    else a.current.points.push(p);
+    annotationRedraw();
+  }
+  function annotationPointerUp(ev){
+    const a=annotation;if(!a?.current)return;
+    a.strokes.push(a.current);a.current=null;annotationRedraw();
+    if(a.canvas.hasPointerCapture(ev.pointerId))a.canvas.releasePointerCapture(ev.pointerId);
+  }
+  function closeAnnotator(){
+    if(!annotation)return;
+    annotation.host.innerHTML='';
+    document.removeEventListener('keydown',annotationKeys,true);
+    URL.revokeObjectURL(annotation.url);
+    annotation=null;
+  }
+  function annotationKeys(e){
+    if(!annotation)return;
+    if(e.key==='Escape'){e.stopImmediatePropagation();e.preventDefault();closeAnnotator();}
+    else if(e.ctrlKey&&e.key.toLowerCase()==='z'){e.stopImmediatePropagation();e.preventDefault();annotation.strokes.pop();annotationRedraw();}
+  }
+  async function saveAnnotation(){
+    const a=annotation;if(!a||!a.strokes.length){notify('Nothing to save yet.');return;}
+    try{
+      const output=document.createElement('canvas');output.width=a.canvas.width;output.height=a.canvas.height;
+      const ctx=output.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,output.width,output.height);
+      ctx.drawImage(a.image,0,0);ctx.drawImage(a.canvas,0,0);
+      const blob=await new Promise(resolve=>output.toBlob(resolve,'image/png'));
+      if(!blob)throw Error('Could not export annotation.');
+      const original=a.entry.name.replace(/\.[^.]+$/,'');
+      const name=await uniqueName(a.dir,`${original}-annotated.png`);
+      const handle=await a.dir.getFileHandle(name,{create:true});
+      const writer=await handle.createWritable();await writer.write(blob);await writer.close();
+      closeAnnotator();
+      await refreshCurrent();const idx=state.visible.findIndex(e=>e.name===name);if(idx>=0)await openIndex(idx);
+      notify(`Saved ${name}`);
+    }catch(err){console.error(err);notify(`Annotation save failed: ${err.message}`);}
+  }
+  const baseAct=act;
+  act=async function(action){
+    if(action==='new-menu'){
+      const button=document.querySelector('[data-action="new-menu"]'),r=button.getBoundingClientRect();
+      return menu([{action:'new-folder',icon:'plusFolder',label:'Folder'},{action:'new-file',icon:'newFile',label:'Markdown / text'},{action:'new-image',icon:'photoPlus',label:'White JPG · 1600 × 900'}],r.left,r.bottom+8);
+    }
+    if(action==='new-image'){ $('context').hidden=true;return createBlankImage(); }
+    if(action==='annotate-image')return openAnnotator();
+    if(action==='edit-svg')return editSvg();
+    if(action==='group-menu'){
+      const r=document.querySelector('[data-action="group-menu"]').getBoundingClientRect();
+      return menu([{action:'group-none',icon:'list',label:'No grouping'},{action:'group-type',icon:'group',label:'By type'},{action:'group-date',icon:'group',label:'By date'}],r.left,r.bottom+8);
+    }
+    if(action.startsWith('view-')){
+      const view=action.slice(5);if(!views.has(view))return;
+      state.view=view;localStorage.setItem('fold-view',view);state.galleryLimit=160;
+      $('file-scroller').scrollTop=0;renderVirtual();return;
+    }
+    if(action.startsWith('group-')){
+      const group=action.slice(6);if(!groups.has(group))return;
+      $('context').hidden=true;state.group=group;localStorage.setItem('fold-group',group);
+      state.layout=null;fileList.scrollTop=0;renderVirtual();return;
+    }
+    if(action==='more'){
+      const r=$('more-button').getBoundingClientRect();
+      return menu([{action:'new-folder',icon:'plusFolder',label:'New folder'},{action:'new-file',icon:'newFile',label:'New Markdown file'},{action:'new-image',icon:'photoPlus',label:'New white JPG'},{action:'import',icon:'upload',label:'Import files'},{divider:true},{action:'paste',icon:'paste',label:'Paste',disabled:!state.clipboard},{action:'select-all',icon:'check',label:'Select all'}],r.left,r.bottom+7);
+    }
+    return baseAct(action);
+  };
+  const formerBlankMenu=blankMenu;
+  blankMenu=undefined; // contextual menu below is added by a DOM capture handler, leaving the original const undisturbed.
+  document.addEventListener('click',e=>{
+    const tool=e.target.closest('[data-anno-tool]');
+    if(tool&&annotation){
+      annotation.tool=tool.dataset.annoTool;
+      annotation.host.querySelectorAll('.anno-tool').forEach(b=>b.classList.toggle('pressed',b===tool));
+      return;
+    }
+    const a=e.target.closest('[data-anno-action]');
+    if(a&&annotation){
+      if(a.dataset.annoAction==='close')closeAnnotator();
+      if(a.dataset.annoAction==='undo'){annotation.strokes.pop();annotationRedraw();}
+      if(a.dataset.annoAction==='save')void saveAnnotation();
+    }
+  });
+  document.addEventListener('input',e=>{
+    if(!annotation)return;
+    if(e.target.id==='anno-color')annotation.color=e.target.value;
+    if(e.target.id==='anno-width')annotation.width=Number(e.target.value);
+  });
+  document.addEventListener('keydown',e=>{
+    if(e.target.id==='preview-editor'&&e.key==='Tab'){
+      e.preventDefault();const el=e.target,p=el.selectionStart,q=el.selectionEnd;
+      el.value=el.value.slice(0,p)+'  '+el.value.slice(q);el.selectionStart=el.selectionEnd=p+2;
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+  });
+  fileList.addEventListener('scroll',()=>{
+    if(state.view!=='gallery'||state.galleryLimit>=state.visible.length)return;
+    if(fileList.scrollTop+fileList.clientHeight>=fileList.scrollHeight-700){
+      state.galleryLimit+=160;renderVirtual();
+    }
+  },{passive:true});
+  // Restore footer-free UI and the chosen view immediately.
+  updateViewButtons();
+})();
 void init();

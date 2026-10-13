@@ -161,7 +161,7 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     return baseShowDirectory(...args);
   };
   const baseRenderList = renderList;
-  renderList = function(...args){state.layout=null;return baseRenderList(...args);};
+  renderList = function(...args){state.layout=null;state.galleryEpoch=(state.galleryEpoch||0)+1;return baseRenderList(...args);};
   const bucket = e => {
     if(e.handle.kind === 'directory') return 'Folders';
     if(state.group === 'type') {
@@ -266,6 +266,9 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     if(!state.visible.length||!state.dir)return;
     const rows=layoutRows(),host=$('file-rows');
     if(state.view==='gallery'){
+      const stamp=[state.galleryEpoch,state.group,state.galleryLimit,[...state.selected].sort().join('|')].join(';');
+      if(host.dataset.mode==='gallery'&&state.galleryStamp===stamp)return;
+      host.dataset.mode='gallery';state.galleryStamp=stamp;
       const count=Math.min(state.galleryLimit,state.visible.length);
       const parts=['<div class="gallery-layout">'];
       let opened=false,shown=0;
@@ -287,6 +290,7 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
       loadThumbnails();
       return;
     }
+    host.dataset.mode='rows';
     const rowHeight=40,top=fileList.scrollTop,h=fileList.clientHeight||600;
     const start=Math.max(0,Math.floor(top/rowHeight)-8);
     const end=Math.min(rows.length,Math.ceil((top+h)/rowHeight)+8);

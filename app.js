@@ -689,5 +689,5 @@ renderPreview=async function(){
   enhancePreview({$,svg,chosen,ext,act});
 };
 installV3({state,$,fileList,notify,svg,active,getSelected,selectIndex,
-  ensurePermission,getDir,uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext});
+  ensurePermission,getDir,uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext,renderVirtual});
 void init();

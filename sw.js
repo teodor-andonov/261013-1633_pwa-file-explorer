@@ -1,6 +1,6 @@
 // Fast, offline-capable shell. Never caches local user files (access is through handles).
-const CACHE = 'fold-shell-v2';
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'fold-shell-v3';
+const ASSETS = ['./', './index.html', './styles.css', './app.js', './fold-v3.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
 });

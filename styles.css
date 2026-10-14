@@ -140,3 +140,22 @@
 .type-icon svg{color:inherit!important}
 .file-row .filename .type-icon svg{color:inherit!important}
 .type-icon:hover{filter:saturate(1.1)}
+
+
+/* Fold v4: reliable pane grips, scalable rows and gallery thumbnails */
+.pane-resizer{width:11px;flex:0 0 11px;z-index:24;cursor:col-resize;touch-action:none}
+.pane-resizer::after{background:var(--line);height:30%;top:35%;left:5px;width:1px;border-radius:2px}
+.pane-resizer:hover::after,.pane-resizer:focus-visible::after,.fold-resizing .pane-resizer::after{background:var(--accent);width:2px}
+.item-size-wrap{height:29px;display:flex;align-items:center;gap:5px;padding:0 7px;border-radius:7px;color:var(--muted);background:var(--bg);border:1px solid var(--line-soft)}
+.item-size-wrap:hover{color:var(--text)}
+.item-size-wrap input[type="range"]{width:77px;height:19px;accent-color:var(--accent);cursor:ew-resize;min-width:0}
+.item-size-wrap .size-mark{font-size:12px;line-height:1}
+.item-size-wrap .size-mark-large{font-size:17px}
+.file-row{height:var(--row,40px)}
+.group-row{height:var(--row,40px)}
+.gallery-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--fold-tile-min,142px)),1fr))}
+.gallery-visual{height:var(--fold-tile-height,132px)}
+.anno-copy{border:1px solid var(--line);color:var(--text);padding:8px 12px;border-radius:7px;font-size:12px}
+.anno-copy:hover{background:var(--hover)}
+.anno-copy:disabled,.anno-save:disabled{opacity:.4;cursor:default}
+@media (max-width:880px){.item-size-wrap input[type="range"]{width:50px}.item-size-wrap .size-mark{display:none}}

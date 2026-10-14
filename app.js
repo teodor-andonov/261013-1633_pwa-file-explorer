@@ -112,14 +112,28 @@ async function importHandles(handles){if(!state.dir||!handles.length)return;let 
 async function downloadSelected(){const entry=chosen();if(!entry||entry.handle.kind!=='file')return;try{const file=await entry.handle.getFile();const url=URL.createObjectURL(file);const a=document.createElement('a');a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){notify(`Download failed: ${e.message}`);}}
 async function refreshCurrent(keepSelection=false){const selected=keepSelection?[...state.selected]:[];await showDirectory(false);if(keepSelection){state.selected=new Set(selected.filter(n=>state.entries.some(e=>e.name===n)));renderVirtual();updateStatus();}}
 function menu(items,x,y){const ctx=$('context');ctx.innerHTML=items.map(item=>item.divider?'<div class="menu-divider"></div>':`<button role="menuitem" class="menu-item ${item.danger?'danger':''}" data-menu="${item.action}" ${item.disabled?'disabled':''}>${svg(item.icon||'file')}<span>${escapeHTML(item.label)}</span>${item.key?`<kbd>${escapeHTML(item.key)}</kbd>`:''}</button>`).join('');ctx.hidden=false;const rect=ctx.getBoundingClientRect();ctx.style.left=`${Math.max(8,Math.min(x,innerWidth-rect.width-8))}px`;ctx.style.top=`${Math.max(8,Math.min(y,innerHeight-rect.height-8))}px`;}
-const fileMenu=()=>[{action:'open-selected',icon:'preview',label:'Open / preview',key:'Enter'},{action:'annotate-image',icon:'pen',label:'Annotate / sketch',disabled:chosen()?.handle.kind!=='file'||!['png','jpg','jpeg','webp','bmp','avif'].includes(ext(chosen()?.name||''))},{action:'rename',icon:'rename',label:'Rename',key:'F2'}, {divider:true},{action:'copy',icon:'copy',label:'Copy',key:'Ctrl+C'},{action:'cut',icon:'scissors',label:'Cut',key:'Ctrl+X'},{action:'paste',icon:'paste',label:'Paste into current folder',key:'Ctrl+V',disabled:!state.clipboard},{divider:true},{action:'download',icon:'download',label:'Save a copy',disabled:getSelected().length!==1||chosen()?.handle.kind!=='file'},{action:'delete',icon:'trash',label:'Delete permanently',key:'Del',danger:true}];
+async function openFolderInTab(){
+  const entry=chosen();
+  if(!entry||entry.handle.kind!=='directory'||getSelected().length!==1)return;
+  try{
+    for(const root of state.roots){
+      if(await root.handle.isSameEntry(entry.handle)){await switchRoot(root.id,true);return;}
+    }
+    const id=crypto.randomUUID();
+    state.roots.push({id,name:entry.name,handle:entry.handle,path:[],history:[[]],pos:0});
+    state.activeId=id;
+    persist();renderRoots();
+    await showDirectory(true);
+  }catch(error){console.error('Open new tab:',error);notify('Could not open folder in a new tab: '+error.message);}
+}
+const fileMenu=()=>[{action:'open-selected',icon:'preview',label:'Open / preview',key:'Enter'},{action:'open-in-tab',icon:'plusFolder',label:'Open in new tab',disabled:getSelected().length!==1||chosen()?.handle.kind!=='directory'},{action:'annotate-image',icon:'pen',label:'Annotate / sketch',disabled:chosen()?.handle.kind!=='file'||!['png','jpg','jpeg'].includes(ext(chosen()?.name||''))},{action:'rename',icon:'rename',label:'Rename',key:'F2'}, {divider:true},{action:'copy',icon:'copy',label:'Copy',key:'Ctrl+C'},{action:'cut',icon:'scissors',label:'Cut',key:'Ctrl+X'},{action:'paste',icon:'paste',label:'Paste into current folder',key:'Ctrl+V',disabled:!state.clipboard},{divider:true},{action:'download',icon:'download',label:'Save a copy',disabled:getSelected().length!==1||chosen()?.handle.kind!=='file'},{action:'delete',icon:'trash',label:'Delete permanently',key:'Del',danger:true}];
 const blankMenu=()=>[{action:'new-folder',icon:'plusFolder',label:'New folder',key:'Ctrl+Shift+N'},{action:'new-file',icon:'newFile',label:'New Markdown file'},{action:'new-image',icon:'photoPlus',label:'New white JPG'}, {action:'import',icon:'upload',label:'Import files'},{divider:true},{action:'paste',icon:'paste',label:'Paste',key:'Ctrl+V',disabled:!state.clipboard},{action:'refresh',icon:'refresh',label:'Refresh',key:'F5'}];
-async function act(action){$('context').hidden=true;switch(action){case 'add-root':return openNewRoot();case 'theme':return setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');case 'grant':return showDirectory(true);case 'refresh':return refreshCurrent(true);case 'back':return navigateDelta(-1);case 'forward':return navigateDelta(1);case 'up':{const r=active();if(r?.path.length)historyTo(r.path.slice(0,-1));return;}case 'new-folder':return createNew('directory');case 'new-file':return createNew('file');case 'import':return $('upload-input').click();case 'rename':return renameSelected();case 'copy':return prepareClipboard(false);case 'cut':return prepareClipboard(true);case 'paste':return pasteClipboard();case 'delete':return deleteSelected();case 'download':return downloadSelected();case 'save-text':return saveText();case 'toggle-preview':state.previewOpen=!state.previewOpen;updatePreviewState();return;case 'close-preview':state.previewOpen=false;updatePreviewState();return;case 'open-selected':{const e=chosen();if(!e)return;const i=state.visible.findIndex(x=>x.name===e.name);if(i>=0)return openIndex(i);return;}case 'more':{const r=$('more-button').getBoundingClientRect();return menu(blankMenu().concat([{divider:true},{action:'select-all',icon:'check',label:'Select all',key:'Ctrl+A'}]),r.left,r.bottom+7);}case 'select-all':state.selected=new Set(state.visible.map(e=>e.name));state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();return;case 'shortcuts':return modal({title:'Keyboard shortcuts',description:'Enter: Open / preview\nSpace: Toggle preview\nF2: Rename\nDelete: Delete permanently\nCtrl+C / X / V: Internal copy, cut, paste\nCtrl+A: Select all\nCtrl+Shift+N: New folder\nAlt+Left / Right / Up: Navigate\n/: Focus filter\nF5: Refresh\nEsc: Clear selection',value:null,confirm:'Close'});}}
+async function act(action){$('context').hidden=true;switch(action){case 'add-root':return openNewRoot();case 'theme':return setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');case 'grant':return showDirectory(true);case 'refresh':return refreshCurrent(true);case 'back':return navigateDelta(-1);case 'forward':return navigateDelta(1);case 'up':{const r=active();if(r?.path.length)historyTo(r.path.slice(0,-1));return;}case 'new-folder':return createNew('directory');case 'new-file':return createNew('file');case 'import':return $('upload-input').click();case 'rename':return renameSelected();case 'copy':return prepareClipboard(false);case 'cut':return prepareClipboard(true);case 'paste':return pasteClipboard();case 'delete':return deleteSelected();case 'download':return downloadSelected();case 'save-text':return saveText();case 'toggle-preview':state.previewOpen=!state.previewOpen;updatePreviewState();return;case 'close-preview':state.previewOpen=false;updatePreviewState();return;case 'open-in-tab':return openFolderInTab();case 'open-selected':{const e=chosen();if(!e)return;const i=state.visible.findIndex(x=>x.name===e.name);if(i>=0)return openIndex(i);return;}case 'more':{const r=$('more-button').getBoundingClientRect();return menu(blankMenu().concat([{divider:true},{action:'select-all',icon:'check',label:'Select all',key:'Ctrl+A'}]),r.left,r.bottom+7);}case 'select-all':state.selected=new Set(state.visible.map(e=>e.name));state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();return;case 'shortcuts':return modal({title:'Keyboard shortcuts',description:'Enter: Open / preview\nSpace: Toggle preview\nF2: Rename\nDelete: Delete permanently\nCtrl+C / X / V: Internal copy, cut, paste\nCtrl+A: Select all\nCtrl+Shift+N: New folder\nAlt+Left / Right / Up: Navigate\n/: Focus filter\nF5: Refresh\nEsc: Clear selection',value:null,confirm:'Close'});}}
 function bindEvents(){document.addEventListener('click',e=>{const menuItem=e.target.closest('[data-menu]');if(menuItem){void act(menuItem.dataset.menu);return;}if(!$('context').contains(e.target))$('context').hidden=true;const close=e.target.closest('[data-close]');if(close){e.stopPropagation();void closeRoot(close.dataset.close);return;}const root=e.target.closest('[data-root]');if(root){void switchRoot(root.dataset.root,true);return;}const crumb=e.target.closest('[data-crumb]');if(crumb){const r=active();if(r)historyTo(r.path.slice(0,Number(crumb.dataset.crumb)));return;}const action=e.target.closest('[data-action]');if(action){void act(action.dataset.action);return;}const row=e.target.closest('[data-row]');if(row){selectIndex(Number(row.dataset.row),{ctrl:e.ctrlKey||e.metaKey,shift:e.shiftKey});return;}if(e.target.closest('#file-scroller')&&state.dir){state.selected.clear();state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();}});
 fileList.addEventListener('dblclick',e=>{const row=e.target.closest('[data-row]');if(row)void openIndex(Number(row.dataset.row));});
 document.addEventListener('contextmenu',e=>{const root=e.target.closest('[data-root]');if(root){e.preventDefault();menu([{action:'close-root',icon:'trash',label:'Close folder tab'}],e.clientX,e.clientY);const closeId=root.dataset.root;$('context').querySelector('[data-menu="close-root"]').onclick=()=>{ $('context').hidden=true;void closeRoot(closeId);};return;}const row=e.target.closest('[data-row]');if(row){e.preventDefault();const i=Number(row.dataset.row);if(!state.selected.has(state.visible[i].name))selectIndex(i);menu(fileMenu(),e.clientX,e.clientY);return;}if(e.target.closest('#files-area')&&state.dir){e.preventDefault();menu(blankMenu(),e.clientX,e.clientY);}});
 fileList.addEventListener('scroll',requestRender,{passive:true});window.addEventListener('resize',requestRender);$('search').addEventListener('input',e=>{state.query=e.target.value;renderList(true);});$('upload-input').addEventListener('change',async e=>{await importFiles([...e.target.files]);e.target.value='';});document.querySelectorAll('[data-sort]').forEach(el=>el.addEventListener('click',()=>{const sort=el.dataset.sort;if(state.sort===sort)state.direction*=-1;else{state.sort=sort;state.direction=1;}sortEntries();renderList();}));
-document.addEventListener('keydown',e=>{const key=e.key.toLowerCase();const editing=e.target.closest('input,textarea,[contenteditable="true"]');if($('modal-root').children.length)return;if(e.key==='Escape'){$('context').hidden=true;if(editing){if(e.target===$('search')){$('search').value='';state.query='';renderList(true);}return;}state.selected.clear();renderVirtual();updateStatus();return;}if(editing){if(e.ctrlKey&&key==='s'&&e.target.id==='preview-editor'){e.preventDefault();void saveText();}return;}if(key==='/'&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();return;}if(!active())return;if(e.key==='F5'){e.preventDefault();void act('refresh');return;}if(e.altKey&&e.key==='ArrowLeft'){e.preventDefault();void act('back');return;}if(e.altKey&&e.key==='ArrowRight'){e.preventDefault();void act('forward');return;}if(e.altKey&&e.key==='ArrowUp'){e.preventDefault();void act('up');return;}if(e.ctrlKey&&e.shiftKey&&key==='n'){e.preventDefault();void act('new-folder');return;}if(e.ctrlKey&&key==='a'){e.preventDefault();void act('select-all');return;}if(e.ctrlKey&&['c','x','v'].includes(key)){e.preventDefault();void act(key==='c'?'copy':key==='x'?'cut':'paste');return;}if(e.key==='F2'){e.preventDefault();void act('rename');return;}if(e.key==='Delete'){e.preventDefault();void act('delete');return;}if(e.key==='Enter'){e.preventDefault();void act('open-selected');return;}if(e.code==='Space'){e.preventDefault();void act('toggle-preview');return;}if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const index=state.visible.findIndex(x=>x.name===[...state.selected][0]);const next=Math.max(0,Math.min(state.visible.length-1,index+(e.key==='ArrowDown'?1:-1)));selectIndex(next,{shift:e.shiftKey});const target=next*40;if(target<fileList.scrollTop)fileList.scrollTop=target;else if(target+40>fileList.scrollTop+fileList.clientHeight)fileList.scrollTop=target-fileList.clientHeight+40;}});
+document.addEventListener('keydown',e=>{const key=e.key.toLowerCase();const editing=e.target.closest('input,textarea,[contenteditable="true"]');if($('modal-root').children.length)return;if(e.key==='Escape'){$('context').hidden=true;if(editing){if(e.target===$('search')){$('search').value='';state.query='';renderList(true);}return;}state.selected.clear();renderVirtual();updateStatus();return;}if(editing){if(e.ctrlKey&&key==='s'&&e.target.id==='preview-editor'){e.preventDefault();void saveText();}return;}if(key==='/'&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();return;}if(!active())return;if(e.key==='F5'){e.preventDefault();void act('refresh');return;}if(e.altKey&&e.key==='ArrowLeft'){e.preventDefault();void act('back');return;}if(e.altKey&&e.key==='ArrowRight'){e.preventDefault();void act('forward');return;}if(e.altKey&&e.key==='ArrowUp'){e.preventDefault();void act('up');return;}if(e.ctrlKey&&e.shiftKey&&key==='n'){e.preventDefault();void act('new-folder');return;}if(e.ctrlKey&&key==='a'){e.preventDefault();void act('select-all');return;}if(e.ctrlKey&&['c','x','v'].includes(key)){e.preventDefault();void act(key==='c'?'copy':key==='x'?'cut':'paste');return;}if(e.key==='F2'){e.preventDefault();void act('rename');return;}if(e.key==='Delete'){e.preventDefault();void act('delete');return;}if(e.key==='Enter'){e.preventDefault();void act('open-selected');return;}if(e.code==='Space'){e.preventDefault();void act('toggle-preview');return;}if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const index=state.visible.findIndex(x=>x.name===[...state.selected][0]);const next=Math.max(0,Math.min(state.visible.length-1,index+(e.key==='ArrowDown'?1:-1)));selectIndex(next,{shift:e.shiftKey});const rowSize=state.itemSize||40;const target=next*rowSize;if(target<fileList.scrollTop)fileList.scrollTop=target;else if(target+rowSize>fileList.scrollTop+fileList.clientHeight)fileList.scrollTop=target-fileList.clientHeight+rowSize;}});
 let dragLevel=0;const area=$('files-area');area.addEventListener('dragenter',e=>{if(!state.dir)return;e.preventDefault();dragLevel++;area.classList.add('drag-over');});area.addEventListener('dragover',e=>{if(!state.dir)return;e.preventDefault();e.dataTransfer.dropEffect='copy';});area.addEventListener('dragleave',e=>{dragLevel=Math.max(0,dragLevel-1);if(!dragLevel)area.classList.remove('drag-over');});area.addEventListener('drop',async e=>{if(!state.dir)return;e.preventDefault();dragLevel=0;area.classList.remove('drag-over');const items=[...e.dataTransfer.items];if(items.some(item=>typeof item.getAsFileSystemHandle==='function')){const pending=items.filter(i=>i.kind==='file').map(i=>i.getAsFileSystemHandle());const handles=(await Promise.all(pending)).filter(Boolean);if(handles.length){await importHandles(handles);return;}}await importFiles([...e.dataTransfer.files]);});
 document.querySelector('.roots').addEventListener('keydown',e=>{const root=e.target.closest('[data-root]');if(root&&(e.key==='Enter'||e.key===' ')){e.preventDefault();void switchRoot(root.dataset.root,true);}});
 }
@@ -147,7 +161,7 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
   icons.edit = icons.rename;
   icons.photoPlus = '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 6-6 3 3m2-5h6m-3-3v6"/>';
   const extensionImage = n => ['png','jpg','jpeg','webp','gif','bmp','avif','svg'].includes(ext(n));
-  const markableImage = n => ['png','jpg','jpeg','webp','bmp','avif'].includes(ext(n));
+  const markableImage = n => ['png','jpg','jpeg'].includes(ext(n));
   const clearThumbnailCache = () => {
     state.thumbnailObserver?.disconnect();
     state.thumbnailObserver=null;
@@ -292,7 +306,7 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
       return;
     }
     host.dataset.mode='rows';
-    const rowHeight=40,top=fileList.scrollTop,h=fileList.clientHeight||600;
+    const rowHeight=state.itemSize||40,top=fileList.scrollTop,h=fileList.clientHeight||600;
     const start=Math.max(0,Math.floor(top/rowHeight)-8);
     const end=Math.min(rows.length,Math.ceil((top+h)/rowHeight)+8);
     const html=[`<div style="height:${start*rowHeight}px"></div>`];
@@ -452,10 +466,10 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
             <input id="anno-width" type="range" min="1" max="18" value="4" title="Pen thickness" aria-label="Pen thickness">
             <button class="tool-button" data-anno-action="undo" title="Undo (Ctrl+Z)" aria-label="Undo">${svg('undo')}</button>
           </div>
-          <div class="annotation-controls"><button class="anno-save" data-anno-action="save" title="Save as new PNG">Save copy</button><button class="tool-button" data-anno-action="close" title="Close" aria-label="Close">${svg('trash')}</button></div>
+          <div class="annotation-controls"><button class="anno-copy" data-anno-action="save-copy" title="Create a separate annotated image">Save copy</button><button class="anno-save" data-anno-action="save" title="Save changes to the original image">Save</button><button class="tool-button" data-anno-action="close" title="Close" aria-label="Close">${svg('trash')}</button></div>
         </div>
         <div class="annotation-body"><div class="annotation-frame" id="anno-frame"><img id="anno-image" alt="" src="${url}"><canvas id="anno-canvas" aria-label="Sketch layer"></canvas></div></div>
-        <div class="annotation-hint">Original preserved · saved as PNG</div>
+        <div class="annotation-hint">Save overwrites the image · Save copy preserves the original · JPEG is recompressed</div>
       </div>`;
       const sourceImg=$('anno-image');await sourceImg.decode();
       const canvas=$('anno-canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
@@ -464,7 +478,7 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
       const frame=$('anno-frame');
       frame.style.aspectRatio=String(ratio);
       frame.style.width=`min(100%, ${Math.round((window.innerHeight-155)*ratio)}px, ${image.naturalWidth}px)`;
-      annotation={host,canvas,ctx,image,entry,dir:state.dir,tool:'pen',strokes:[],current:null,color:'#ee5145',width:4,url};
+      annotation={host,canvas,ctx,image,entry,dir:state.dir,sourceModified:file.lastModified,sourceSize:file.size,tool:'pen',strokes:[],current:null,color:'#ee5145',width:4,url,busy:false};
       canvas.addEventListener('pointerdown',annotationPointerDown);
       canvas.addEventListener('pointermove',annotationPointerMove);
       canvas.addEventListener('pointerup',annotationPointerUp);
@@ -521,8 +535,9 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     a.strokes.push(a.current);a.current=null;annotationRedraw();
     if(a.canvas.hasPointerCapture(ev.pointerId))a.canvas.releasePointerCapture(ev.pointerId);
   }
-  function closeAnnotator(){
+  function closeAnnotator(force=false){
     if(!annotation)return;
+    if(!force&&annotation.strokes.length&&!window.confirm('Discard unsaved image annotations?'))return;
     if(annotationFrame)cancelAnimationFrame(annotationFrame);
     annotationFrame=0;
     annotation.host.innerHTML='';
@@ -535,22 +550,50 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     if(e.key==='Escape'){e.stopImmediatePropagation();e.preventDefault();closeAnnotator();}
     else if(e.ctrlKey&&e.key.toLowerCase()==='z'){e.stopImmediatePropagation();e.preventDefault();annotation.strokes.pop();annotationRedraw();}
   }
-  async function saveAnnotation(){
-    const a=annotation;if(!a||!a.strokes.length){notify('Nothing to save yet.');return;}
+  async function saveAnnotation(copy=false){
+    const a=annotation;
+    if(!a||a.busy)return;
+    if(!a.strokes.length){notify('Nothing to save yet.');return;}
+    a.busy=true;
+    a.host.querySelectorAll('[data-anno-action="save"],[data-anno-action="save-copy"]').forEach(button=>button.disabled=true);
     try{
-      const output=document.createElement('canvas');output.width=a.canvas.width;output.height=a.canvas.height;
-      const ctx=output.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,output.width,output.height);
+      const isJpeg=/\.jpe?g$/i.test(a.entry.name);
+      const mime=isJpeg?'image/jpeg':'image/png';
+      const output=document.createElement('canvas');
+      output.width=a.canvas.width;output.height=a.canvas.height;
+      const ctx=output.getContext('2d',{alpha:!isJpeg});
+      if(!ctx)throw Error('Unable to create image canvas.');
+      if(isJpeg){ctx.fillStyle='#fff';ctx.fillRect(0,0,output.width,output.height);}
       ctx.drawImage(a.image,0,0);ctx.drawImage(a.canvas,0,0);
-      const blob=await new Promise(resolve=>output.toBlob(resolve,'image/png'));
-      if(!blob)throw Error('Could not export annotation.');
-      const original=a.entry.name.replace(/\.[^.]+$/,'');
-      const name=await uniqueName(a.dir,`${original}-annotated.png`);
-      const handle=await a.dir.getFileHandle(name,{create:true});
-      const writer=await handle.createWritable();await writer.write(blob);await writer.close();
-      closeAnnotator();
-      await refreshCurrent();const idx=state.visible.findIndex(e=>e.name===name);if(idx>=0)await openIndex(idx);
-      notify(`Saved ${name}`);
-    }catch(err){console.error(err);notify(`Annotation save failed: ${err.message}`);}
+      const blob=await new Promise(resolve=>output.toBlob(resolve,mime,isJpeg?0.95:undefined));
+      if(!blob||blob.type!==mime)throw Error('Image encoding is not supported.');
+      let handle=a.entry.handle,name=a.entry.name;
+      if(copy){
+        const dot=a.entry.name.lastIndexOf('.');
+        const suffix=a.entry.name.slice(dot);
+        const stem=a.entry.name.slice(0,dot);
+        name=await uniqueName(a.dir,`${stem}-annotated${suffix}`);
+        handle=await a.dir.getFileHandle(name,{create:true});
+      }else{
+        const current=await handle.getFile();
+        if(current.lastModified!==a.sourceModified||current.size!==a.sourceSize)
+          throw Error('The original image changed since you opened it. Use Save copy instead.');
+      }
+      const writer=await handle.createWritable();
+      try{await writer.write(blob);await writer.close();}
+      catch(error){try{await writer.abort();}catch{}throw error;}
+      closeAnnotator(true);
+      await refreshCurrent();
+      const index=state.visible.findIndex(e=>e.name===name);
+      if(index>=0)await openIndex(index);
+      notify(copy?'Saved separate copy: '+name:'Saved changes to '+name);
+    }catch(error){console.error('Annotation save:',error);notify('Save failed: '+error.message);}
+    finally{
+      if(annotation===a){
+        a.busy=false;
+        a.host.querySelectorAll('[data-anno-action="save"],[data-anno-action="save-copy"]').forEach(button=>button.disabled=false);
+      }
+    }
   }
   const baseAct=act;
   act=async function(action){
@@ -592,7 +635,8 @@ async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if
     if(a&&annotation){
       if(a.dataset.annoAction==='close')closeAnnotator();
       if(a.dataset.annoAction==='undo'){annotation.strokes.pop();annotationRedraw();}
-      if(a.dataset.annoAction==='save')void saveAnnotation();
+      if(a.dataset.annoAction==='save')void saveAnnotation(false);
+      if(a.dataset.annoAction==='save-copy')void saveAnnotation(true);
     }
   });
   document.addEventListener('input',e=>{

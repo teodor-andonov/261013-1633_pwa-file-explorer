@@ -67,45 +67,102 @@ export function installV3(api){
   const previewSetting=Number(localStorage.getItem('fold-preview-width'));
   if(railSetting>=120&&railSetting<=440)document.documentElement.style.setProperty('--fold-rail-width',railSetting+'px');
   if(previewSetting>=260&&previewSetting<=920)document.documentElement.style.setProperty('--fold-preview-width',previewSetting+'px');
-  function resizer(element,side) {
+  function resizer(element,side){
     if(!element)return;
-    let initial=0;
-    const update=x=>{
-      let value;
-      if(side==='left'){
-        value=clamp(x-$('.app').getBoundingClientRect().left,120,Math.min(420,innerWidth-400));
-        document.documentElement.style.setProperty('--fold-rail-width',value+'px');
-      }else{
-        value=clamp($('.workspace-body').getBoundingClientRect().right-x,260,Math.min(820,innerWidth-340));
-        document.documentElement.style.setProperty('--fold-preview-width',value+'px');
-      }
-      initial=value;
-    };
-    element.addEventListener('pointerdown',e=>{
-      if(e.button!==0)return;
+    const property=side==='left'?'--fold-rail-width':'--fold-preview-width';
+    const key=side==='left'?'fold-rail-width':'fold-preview-width';
+    const defaultValue=side==='left'?174:410;
+    const panel=side==='left'?document.querySelector('.sidebar'):$('preview');
+    let gesture=null;
+    function constrain(value){
+      const min=side==='left'?120:260;
+      const max=side==='left'?Math.min(420,innerWidth-360):Math.min(820,innerWidth-320);
+      return clamp(Math.round(value),min,Math.max(min,max));
+    }
+    function apply(value,persist=false){
+      const next=constrain(value);
+      document.documentElement.style.setProperty(property,next+'px');
+      element.setAttribute('aria-valuenow',String(next));
+      if(persist)localStorage.setItem(key,String(next));
+    }
+    function move(e){
+      if(!gesture||e.pointerId!==gesture.pointerId)return;
+      const multiplier=side==='left'?1:-1;
+      apply(gesture.width+multiplier*(e.clientX-gesture.x));
+    }
+    function endDrag(e){
+      if(!gesture||e.pointerId!==gesture.pointerId)return;
       e.preventDefault();
-      element.setPointerCapture(e.pointerId);
-      document.documentElement.classList.add('fold-resizing');
-    });
-    element.addEventListener('pointermove',e=>{
-      if(!element.hasPointerCapture(e.pointerId))return;
-      update(e.clientX);
-    });
-    const finish=()=>{
+      gesture=null;
       document.documentElement.classList.remove('fold-resizing');
-      if(initial)localStorage.setItem(side==='left'?'fold-rail-width':'fold-preview-width',String(initial));
-    };
-    element.addEventListener('pointerup',finish);
-    element.addEventListener('pointercancel',finish);
-    element.addEventListener('keydown',e=>{
-      if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;
-      e.preventDefault();
-      const rect=element.getBoundingClientRect();
-      update(rect.left+(e.key==='ArrowRight'?14:-14));
-      finish();
+      window.removeEventListener('pointermove',move,true);
+      window.removeEventListener('pointerup',endDrag,true);
+      window.removeEventListener('pointercancel',endDrag,true);
+      apply(panel.getBoundingClientRect().width,true);
+    }
+    element.addEventListener('pointerdown',e=>{
+      if(e.button!==0||gesture)return;
+      e.preventDefault();e.stopPropagation();
+      gesture={pointerId:e.pointerId,x:e.clientX,width:panel.getBoundingClientRect().width};
+      document.documentElement.classList.add('fold-resizing');
+      window.addEventListener('pointermove',move,true);
+      window.addEventListener('pointerup',endDrag,true);
+      window.addEventListener('pointercancel',endDrag,true);
     });
+    element.addEventListener('keydown',e=>{
+      if(!['ArrowLeft','ArrowRight','Home'].includes(e.key))return;
+      e.preventDefault();
+      const direction=e.key==='ArrowRight'?1:-1;
+      const width=e.key==='Home'?defaultValue:panel.getBoundingClientRect().width+direction*(side==='left'?1:-1)*(e.shiftKey?40:12);
+      apply(width,true);
+    });
+    element.addEventListener('dblclick',()=>{
+      apply(defaultValue,true);
+    });
+    element.setAttribute('aria-valuemin',side==='left'?'120':'260');
+    element.setAttribute('aria-valuemax',side==='left'?'420':'820');
+    apply(panel.getBoundingClientRect().width);
   }
-  resizer(left,'left');resizer(right,'right');
+  resizer(left,'left');
+  resizer(right,'right');
+
+  // One compact scale control; each view remembers its own item size.
+  const sizeInput=$('item-size');
+  const sizeDefaults={list:40,table:40,gallery:142};
+  const sizeBounds={list:[30,74,2],table:[30,74,2],gallery:[100,300,2]};
+  function setSizeForView(){
+    if(!sizeInput)return;
+    const view=state.view||'list';
+    const [min,max,step]=sizeBounds[view]||sizeBounds.list;
+    const stored=Number(localStorage.getItem('fold-item-size-'+view));
+    const value=Number.isFinite(stored)&&stored>=min&&stored<=max?stored:sizeDefaults[view];
+    sizeInput.min=String(min);sizeInput.max=String(max);
+    sizeInput.step=String(step);sizeInput.value=String(value);
+    updateSize(value,false);
+  }
+  function updateSize(value,remember=true){
+    const view=state.view||'list';
+    const [min,max]=sizeBounds[view]||sizeBounds.list;
+    const n=clamp(Math.round(value),min,max);
+    sizeInput.value=String(n);
+    sizeInput.title='Item size: '+n+'px';
+    sizeInput.setAttribute('aria-valuetext',view==='gallery'?n+' pixel gallery tiles':n+' pixel rows');
+    if(view==='gallery'){
+      document.documentElement.style.setProperty('--fold-tile-min',n+'px');
+      document.documentElement.style.setProperty('--fold-tile-height',Math.round(n*.91)+'px');
+    }else{
+      state.itemSize=n;
+      document.documentElement.style.setProperty('--row',n+'px');
+    }
+    if(remember)localStorage.setItem('fold-item-size-'+view,String(n));
+    api.renderVirtual();
+  }
+  sizeInput?.addEventListener('input',e=>updateSize(Number(e.target.value)));
+  document.addEventListener('click',e=>{
+    if(e.target.closest('[data-action^="view-"]'))requestAnimationFrame(setSizeForView);
+  });
+  setSizeForView();
+
   // Native drag/drop is used only as a UI gesture. Actual moves are permission-aware.
   let drag=null,hover=null;
   const highlight=el=>{
@@ -207,6 +264,6 @@ export function installV3(api){
     if(!e.target.closest('.preview-visual img'))return;
     const entry=chosen();if(!entry)return;
     if(ext(entry.name)==='svg')void act('edit-svg');
-    else if(['png','jpg','jpeg','webp','bmp','avif'].includes(ext(entry.name)))void act('annotate-image');
+    else if(['png','jpg','jpeg'].includes(ext(entry.name)))void act('annotate-image');
   });
 }

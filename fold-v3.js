@@ -121,7 +121,7 @@ export function installV3(api){
     });
     element.setAttribute('aria-valuemin',side==='left'?'120':'260');
     element.setAttribute('aria-valuemax',side==='left'?'420':'820');
-    apply(panel.getBoundingClientRect().width);
+    apply(panel.getBoundingClientRect().width||(side==='right'?previewSetting:railSetting)||defaultValue);
   }
   resizer(left,'left');
   resizer(right,'right');

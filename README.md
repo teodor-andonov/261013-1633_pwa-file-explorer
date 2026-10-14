@@ -18,6 +18,9 @@ For local development, run `python -m http.server 8000` from this directory and 
 - Virtualized, sorted file list; quick in-folder filtering; lazy file-size/date metadata
 - Keyboard and mouse multi-selection, standard keyboard shortcuts and custom right-click menus
 - New files/folders, rename, import/drag-and-drop, copy, cut, paste, duplicate via copy/paste, permanent delete
+- **Right-click a folder → Open in new tab**. Nested folders open as independent persistent tabs in the left rail; existing open tabs are reused.
+- **Adjust item scale** via the toolbar slider, remembering separate sizes for list, table and gallery; sidebar and preview handles are wider and now track pointer drags across the window.
+- **JPG and PNG image annotations:** **Save** writes to the original file (flattened raster); **Save copy** creates a separate annotated file in the same format. PNG transparency is kept, while JPEG is re-encoded at high quality and EXIF/metadata may be lost. Overwrite is blocked when the source has changed since opening.
 - **Drag to move** files/folders onto other folders, sidebar folder tabs, or breadcrumbs; hold **Ctrl while dropping to copy**. Supports multi-selection. Fold handles conflicts using unique names and never overwrites existing files.
 - Compact **extension-specific symbols** with consistent per-type accent colours (including CAD/BIM formats)
 - **Resizable folder rail and preview inspector**, with panel widths remembered locally
@@ -27,7 +30,7 @@ For local development, run `python -m http.server 8000` from this directory and 
 - Preview JPG/PNG/WebP/GIF/SVG images, PDF, audio and video, plus code and text with a read-only syntax-coloured view
 - Edit/save TXT, MD, JSON, JS, TS, Python, HTML, CSS and other plain-text/code files (up to 2 MB); Markdown has a simple rendered preview; SVG source can be edited
 - Create Markdown/text files (choose a `.txt` name for TXT) and blank white **1600 × 900 JPG** images
-- Annotate raster images with pen, marker, shapes, text and eraser; undo and **Save copy** export as PNG, without overwriting the source
+- Annotate JPG/PNG images with pen, marker, shapes, text and eraser; undo, overwrite with **Save**, or preserve original with **Save copy**
 - Light/dark mode, standalone install, offline shell, network-first app updates
 - No analytics, server, third-party scripts, bundler or runtime dependencies
 

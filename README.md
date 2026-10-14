@@ -18,6 +18,10 @@ For local development, run `python -m http.server 8000` from this directory and 
 - Virtualized, sorted file list; quick in-folder filtering; lazy file-size/date metadata
 - Keyboard and mouse multi-selection, standard keyboard shortcuts and custom right-click menus
 - New files/folders, rename, import/drag-and-drop, copy, cut, paste, duplicate via copy/paste, permanent delete
+- **Drag to move** files/folders onto other folders, sidebar folder tabs, or breadcrumbs; hold **Ctrl while dropping to copy**. Supports multi-selection. Fold handles conflicts using unique names and never overwrites existing files.
+- Compact **extension-specific symbols** with consistent per-type accent colours (including CAD/BIM formats)
+- **Resizable folder rail and preview inspector**, with panel widths remembered locally
+- Text/code/Markdown previews are **read-only by default**. Click the pencil or double-click the rendered preview to enter edit mode; click the preview icon to leave edit mode.
 - Compact icon-first UI with **List**, **Table**, and thumbnail **Gallery** views
 - Optional grouping by **type** or **date**; lazy-loading thumbnails, capped gallery batches
 - Preview JPG/PNG/WebP/GIF/SVG images, PDF, audio and video, plus code and text with a read-only syntax-coloured view
@@ -26,6 +30,10 @@ For local development, run `python -m http.server 8000` from this directory and 
 - Annotate raster images with pen, marker, shapes, text and eraser; undo and **Save copy** export as PNG, without overwriting the source
 - Light/dark mode, standalone install, offline shell, network-first app updates
 - No analytics, server, third-party scripts, bundler or runtime dependencies
+
+## File movement safety
+
+Internal drag-and-drop currently uses a **copy-then-delete** fallback for moves. This is *not an atomic Windows filesystem move*. For large trees or critical files, test with copies first. A failed copy does not delete the source, but may leave a partial target that must be inspected. Ctrl+drag copies, and dropping onto a folder tab or breadcrumb moves into that folder. Dragging items between Fold and Windows Explorer via Windows clipboard/drag data is not a full replacement yet.
 
 ## Important browser limitations
 
@@ -67,6 +75,7 @@ This project is static. No Node, npm or CI is necessary. GitHub Pages serves it 
 - `index.html` — semantic static shell
 - `styles.css` — restrained UI, virtual-row styles, theme variables
 - `app.js` — File System Access, virtual list, state, commands, previews
+- `fold-v3.js` — native drag gestures, permission-aware transfer, file-type badges, pane resize, preview/edit switching
 - `manifest.webmanifest`, `sw.js`, `icons/` — installability/offline shell
 
 **Security:** There's no server API. Do not grant an untrusted copy of this app access to important folders. Start with a test folder. Any web app with granted `readwrite` folder access can modify those files.

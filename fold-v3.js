@@ -40,6 +40,7 @@ export function enhancePreview({$,svg,chosen,ext,act}) {
         const desired=typeof force==='boolean'?force:!editing;
         if(editing===desired)return;
         originalToggle.click();
+        if(!desired)host.querySelector('.code-render,.markdown-render')?.addEventListener('dblclick',()=>switchMode(true));
         editing=desired;
         control.title=editing?'Preview file':'Edit file';
         control.setAttribute('aria-label',control.title);
@@ -100,7 +101,7 @@ export function installV3(api){
       if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;
       e.preventDefault();
       const rect=element.getBoundingClientRect();
-      update(rect.left+(side==='left'?1:-1)*(e.key==='ArrowRight'?14:-14));
+      update(rect.left+(e.key==='ArrowRight'?14:-14));
       finish();
     });
   }

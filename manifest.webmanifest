@@ -2,7 +2,7 @@
   "name": "Fold — File Explorer",
   "short_name": "Fold",
   "description": "A minimal Windows file explorer powered by local folder access.",
-  "id": "./",
+  "id": "/261013-1633_pwa-file-explorer/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

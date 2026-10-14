@@ -136,3 +136,7 @@
 .preview-reader-tools .tool-button{border:1px solid var(--line)}
 .preview-toolstrip [hidden],.preview-save[hidden]{display:none!important}
 .code-render{font-size:12px}
+
+.type-icon svg{color:inherit!important}
+.file-row .filename .type-icon svg{color:inherit!important}
+.type-icon:hover{filter:saturate(1.1)}

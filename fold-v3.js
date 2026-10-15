@@ -246,7 +246,7 @@ export function installV3(api){
         mode:copy?'copy':'move'
       });
       await refreshCurrent(true);
-      if(report.failed.length)console.warn('Drag/drop transfer issues',report);
+      if(report?.failed?.length)console.warn('Drag/drop transfer issues',report);
     }catch(err){console.error('Fold drop',err);notify('Transfer failed: '+err.message);}
   }
   // A read-only image preview is double-clicked to start image editing/sketching.

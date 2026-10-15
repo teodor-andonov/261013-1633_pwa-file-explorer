@@ -123,24 +123,73 @@ async function uniqueName(dir,requested){
 }
 async function createNew(kindToCreate){if(!state.dir)return;const initial=kindToCreate==='directory'?'New folder':'Untitled.md';const name=(await modal({title:`New ${kindToCreate==='directory'?'folder':'file'}`,value:initial}))?.trim();if(name==null)return;if(!filenameOK(name)){notify('Invalid Windows filename.');return;}try{if(await uniqueName(state.dir,name)!==name){notify('A file or folder already has that name.');return;}if(kindToCreate==='directory')await state.dir.getDirectoryHandle(name,{create:true});else{const handle=await state.dir.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.close();}await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}catch(e){notify(`Creation failed: ${e.message}`);}}
 
-function transferProgress(data){
+let activeTransferController=null;
+function transferElement(){
   let el=document.getElementById('fold-transfer-progress');
-  if(!el){el=document.createElement('div');el.id='fold-transfer-progress';el.className='fold-transfer-progress';el.setAttribute('role','status');document.body.append(el);}
-  if(data.phase==='finished'){el.hidden=true;return;}
-  const names={copying:'Copying',verifying:'Checking',publishing:'Publishing','verifying-final':'Verifying','removing-source':'Removing original',completed:'Finished',failed:'Issue'};
-  el.hidden=false;el.textContent=(names[data.phase]||'Working')+' · '+Math.min(data.completed+1,data.total)+' / '+data.total+' · '+data.item;
+  if(!el){
+    el=document.createElement('div');el.id='fold-transfer-progress';
+    el.className='fold-transfer-progress';el.setAttribute('role','status');
+    document.body.append(el);
+  }
+  return el;
+}
+function transferProgress(data){
+  const el=transferElement();
+  if(data.phase==='finished')return;
+  const names={copying:'Copying',verifying:'Checking',publishing:'Publishing','verifying-final':'Verifying',
+    'removing-source':'Removing original',completed:'Finished',failed:'Issue'};
+  el.hidden=false;
+  el.replaceChildren();
+  const label=document.createElement('span');
+  label.className='transfer-message';
+  label.textContent=(names[data.phase]||'Working')+' · '+Math.min(data.completed+1,data.total)+' / '+data.total+' · '+data.item;
+  el.append(label);
+  if(activeTransferController&&!activeTransferController.signal.aborted){
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';
+    cancel.title='Stop after the current filesystem operation';
+    cancel.onclick=()=>{activeTransferController?.abort();cancel.disabled=true;cancel.textContent='Stopping…';};
+    el.append(cancel);
+  }
 }
 function transferResult(report){
-  transferProgress({phase:'finished'});
-  if(report.failed.length){console.warn('Fold file operations:',report);notify(report.completed+'/'+report.total+' done · '+report.failed[0].message);}
-  else notify(report.completed+' file operation(s) completed');
-  if(report.warnings.length){console.warn('Fold cleanup:',report.warnings);notify('Transfer cleanup warning. Check console.');}
+  const el=transferElement();
+  const problems=[...report.failed.map(x=>x.name+': '+x.message),
+    ...report.warnings.map(x=>x.name+': '+x.message)];
+  if(problems.length){
+    console.warn('Fold file transfer report:',report);
+    el.hidden=false;el.replaceChildren();
+    const top=document.createElement('div');top.className='transfer-report-title';
+    top.textContent=report.completed+'/'+report.total+' transferred · '+problems.length+' issue(s)';
+    const details=document.createElement('details');details.open=true;
+    const summary=document.createElement('summary');summary.textContent='Show issues';
+    const list=document.createElement('ul');
+    for(const message of problems){
+      const li=document.createElement('li');li.textContent=message;list.append(li);
+    }
+    details.append(summary,list);
+    const close=document.createElement('button');close.type='button';close.textContent='Dismiss';
+    close.onclick=()=>{el.hidden=true;};
+    el.append(top,details,close);
+    notify('File operation needs attention; see transfer report.');
+  }else{
+    el.hidden=true;
+    notify(report.cancelled?'Transfer cancelled after '+report.completed+' item(s).':
+      report.completed+' item(s) transferred');
+  }
   return report;
 }
 async function runTransfer(options){
-  return transferResult(await transferItems({...options,onProgress:transferProgress}));
+  if(activeTransferController){
+    notify('A file operation is already running.');return null;
+  }
+  const controller=new AbortController();activeTransferController=controller;
+  try{
+    const report=await transferItems({...options,signal:controller.signal,onProgress:transferProgress});
+    return transferResult(report);
+  }finally{
+    activeTransferController=null;
+  }
 }
-
 async function copyEntry(source,dest,name){if(source.kind==='file'){const srcFile=await source.getFile();const output=await dest.getFileHandle(name,{create:true});const stream=await output.createWritable();try{await stream.write(srcFile);await stream.close();}catch(e){await stream.abort().catch(()=>{});throw e;}return;}const target=await dest.getDirectoryHandle(name,{create:true});for await(const [childName,child] of source.entries())await copyEntry(child,target,childName);}
 async function isDescendantOf(dest,source){if(source.kind!=='directory')return false;try{return (await source.resolve(dest))!==null;}catch{return false;}}
 async function renameSelected(){
@@ -156,7 +205,7 @@ async function renameSelected(){
       catch(e){if(!['NotSupportedError','InvalidModificationError','NotAllowedError'].includes(e.name))throw e;}
     }
     const result=await runTransfer({items:[{name:old,handle:entry.handle}],sourceDir:state.dir,destinationDir:state.dir,mode:'move',renameTo:name});
-    if(result.outputs.length){await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}
+    if(result?.outputs?.length){await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}
   }catch(e){console.error(e);notify('Rename failed: '+e.message);}
 }
 function prepareClipboard(cut){const sel=getSelected();if(!sel.length||!state.dir)return;state.clipboard={items:sel.map(e=>({name:e.name,handle:e.handle,parent:state.dir,rootId:active().id,path:[...active().path]})),cut};notify(`${sel.length} item${sel.length>1?'s':''} ${cut?'cut':'copied'}`);updateStatus();}
@@ -169,7 +218,7 @@ async function pasteClipboard(){
     let allPassed=true;
     for(const [sourceDir,items] of byParent){
       const result=await runTransfer({items,sourceDir,destinationDir:state.dir,mode:clip.cut?'move':'copy'});
-      if(result.failed.length||result.cancelled||result.warnings.length)allPassed=false;
+      if(!result||result.failed.length||result.cancelled||result.warnings.length)allPassed=false;
     }
     if(clip.cut&&allPassed)state.clipboard=null;
     await refreshCurrent();updateStatus();

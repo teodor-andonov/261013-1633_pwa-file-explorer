@@ -11,6 +11,14 @@ A tiny, dependency-free file explorer PWA for **Windows + current Chrome/Edge**.
 
 For local development, run `python -m http.server 8000` from this directory and open `http://localhost:8000`. Do **not** open the HTML through a `file://` URL; the File System Access API needs a secure context and user activation.
 
+## Development roadmap and logs
+
+- **[Roadmap](./logs/ROADMAP.md)** — priorities, milestones, task IDs and acceptance criteria
+- **[Development logs](./logs/README.md)** — how to record plans, experiments, discussions and implementation notes
+- **[Initial decisions and project context](./logs/2026-10-15-project-notes.md)** — goals, constraints, trade-offs and ideas
+
+Development notes live in `logs/`; this README describes how to use the app.
+
 ## Features
 
 - Multiple root folder tabs with navigable subfolders and breadcrumbs
@@ -45,7 +53,7 @@ Internal drag-and-drop currently uses a **copy-then-delete** fallback for moves.
 - **Internal clipboard only.** Ctrl+C / Ctrl+X / Ctrl+V work between Fold folders/tabs, not the Windows/Explorer clipboard.
 - **Delete is permanent.** `removeEntry` does **not** send files to the Recycle Bin. This is why Fold requires explicit confirmation and labels the action accordingly.
 - **Rename/move can be copy-then-delete.** Native filesystem move/rename isn't generally supported for local directories; Fold copies, then removes the original only after a successful copy. This may be slow for very large folder trees. If copy succeeds but removal fails, both copies can remain.
-- The image annotator currently saves a flattened annotated PNG copy. It is not a layered editor, and very large images may exhaust browser canvas memory. File metadata (size/modified) is read lazily. Some files can be inaccessible because of Windows locks or browser safeguards. Web-based previews cannot display every proprietary format.
+- JPG and PNG image annotations save flattened pixels, not editable layers. **Save** overwrites the original; **Save copy** creates a separate file. JPEG re-encoding can reduce quality and remove EXIF metadata, while very large images may exhaust browser canvas memory. File metadata (size/modified) is read lazily. Some files can be inaccessible because of Windows locks or browser safeguards. Web-based previews cannot display every proprietary format.
 - Folder access uses `showDirectoryPicker({ mode: 'readwrite' })`, which is Chromium-specific and requires HTTPS or localhost.
 - GitHub Pages serves the **app code only**. Your Windows folder contents are accessed directly by the browser's local API; they are not added to Git or sent to GitHub.
 

@@ -190,7 +190,6 @@ async function runTransfer(options){
     activeTransferController=null;
   }
 }
-async function copyEntry(source,dest,name){if(source.kind==='file'){const srcFile=await source.getFile();const output=await dest.getFileHandle(name,{create:true});const stream=await output.createWritable();try{await stream.write(srcFile);await stream.close();}catch(e){await stream.abort().catch(()=>{});throw e;}return;}const target=await dest.getDirectoryHandle(name,{create:true});for await(const [childName,child] of source.entries())await copyEntry(child,target,childName);}
 async function isDescendantOf(dest,source){if(source.kind!=='directory')return false;try{return (await source.resolve(dest))!==null;}catch{return false;}}
 async function renameSelected(){
   const entry=chosen();if(!entry||!state.dir)return;
@@ -845,5 +844,5 @@ renderPreview=async function(){
   enhancePreview({$,svg,chosen,ext,act});
 };
 installV3({state,$,fileList,notify,svg,active,getSelected,selectIndex,
-  ensurePermission,getDir,uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext,renderVirtual,runTransfer});
+  ensurePermission,getDir,uniqueName,isDescendantOf,refreshCurrent,chosen,act,ext,renderVirtual,runTransfer});
 void init();

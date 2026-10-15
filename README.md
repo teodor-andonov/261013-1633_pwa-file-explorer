@@ -25,7 +25,7 @@ Development notes live in `logs/`; this README describes how to use the app.
 - IndexedDB-backed folder handles and restored workspaces (permissions may need renewing after restart)
 - Virtualized, sorted file list; quick in-folder filtering; lazy file-size/date metadata
 - Keyboard and mouse multi-selection, standard keyboard shortcuts and custom right-click menus
-- New files/folders, rename, import/drag-and-drop, copy, cut, paste, duplicate via copy/paste, permanent delete
+- New files/folders, rename, import/drag-and-drop, copy, cut and paste, verified transfers, recoverable Fold Trash and separately confirmed permanent deletion
 - **Right-click a folder → Open in new tab**. Nested folders open as independent persistent tabs in the left rail; existing open tabs are reused.
 - **Adjust item scale** via the toolbar slider, remembering separate sizes for list, table and gallery; sidebar and preview handles are wider and now track pointer drags across the window.
 - **JPG and PNG image annotations:** **Save** writes to the original file (flattened raster); **Save copy** creates a separate annotated file in the same format. PNG transparency is kept, while JPEG is re-encoded at high quality and EXIF/metadata may be lost. Overwrite is blocked when the source has changed since opening.
@@ -42,17 +42,28 @@ Development notes live in `logs/`; this README describes how to use the app.
 - Light/dark mode, standalone install, offline shell, network-first app updates
 - No analytics, server, third-party scripts, bundler or runtime dependencies
 
-## File movement safety
+## Safer file operations (reliability development)
 
-Internal drag-and-drop currently uses a **copy-then-delete** fallback for moves. This is *not an atomic Windows filesystem move*. For large trees or critical files, test with copies first. A failed copy does not delete the source, but may leave a partial target that must be inspected. Ctrl+drag copies, and dropping onto a folder tab or breadcrumb moves into that folder. Dragging items between Fold and Windows Explorer via Windows clipboard/drag data is not a full replacement yet.
+File copy/move/rename/import/drag operations use a staged transfer engine:
 
+1. Copy into a temporary directory inside the approved destination.
+2. Compare staged file contents **byte-for-byte** against the source, including nested folders.
+3. Publish the destination and verify it again.
+4. For a **move**, remove the source **only after verification**. Report a failed removal without hiding the duplicate.
+5. Clean up temporary/failed targets where possible; show a persistent error report if cleanup fails.
+
+**This is not an atomic OS move.** Filesystem access can fail, the app can close during a transfer, or files can change concurrently. Start with disposable folders; investigate staging remnants after interruption. There is an on-screen Cancel control and operations are serialized to reduce accidental concurrency.
+
+**Delete** sends items to **Fold Trash** (`.fold-trash` inside the approved root), with immediate Undo. Items remain on disk and can be browsed and moved back later. **Shift+Delete** is separately confirmed and permanent. Fold Trash is **not** the Windows Recycle Bin.
+
+Text saves detect external file changes before overwriting; JPG/PNG Save and Save copy retain warnings about re-encoding and metadata.
 ## Important browser limitations
 
 - **The explorer accesses only folders you explicitly approve.** Browser permissions can expire across sessions. Folder tab handles are stored locally in IndexedDB; actual files are not uploaded.
 - **Not a Windows shell replacement.** A PWA cannot enumerate drives without a picker, reveal unrestricted absolute Windows paths, run EXEs, integrate native Windows context-menu extensions, or reliably open files in their Windows default apps. Use **Save a copy** to download a file.
 - **Internal clipboard only.** Ctrl+C / Ctrl+X / Ctrl+V work between Fold folders/tabs, not the Windows/Explorer clipboard.
-- **Delete is permanent.** `removeEntry` does **not** send files to the Recycle Bin. This is why Fold requires explicit confirmation and labels the action accordingly.
-- **Rename/move can be copy-then-delete.** Native filesystem move/rename isn't generally supported for local directories; Fold copies, then removes the original only after a successful copy. This may be slow for very large folder trees. If copy succeeds but removal fails, both copies can remain.
+- **Permanent deletion bypasses the Windows Recycle Bin.** Use Shift+Delete only for files you intend to destroy. Ordinary Delete moves to `.fold-trash` inside the approved root, using the verified-transfer engine.
+- **Rename/move can be staged copy-then-delete.** Native filesystem move/rename isn't generally supported for local directories. Fold verifies destination contents first, but operations can still be slow and aren't atomic. If source removal fails, both copies may remain, and Fold reports the issue.
 - JPG and PNG image annotations save flattened pixels, not editable layers. **Save** overwrites the original; **Save copy** creates a separate file. JPEG re-encoding can reduce quality and remove EXIF metadata, while very large images may exhaust browser canvas memory. File metadata (size/modified) is read lazily. Some files can be inaccessible because of Windows locks or browser safeguards. Web-based previews cannot display every proprietary format.
 - Folder access uses `showDirectoryPicker({ mode: 'readwrite' })`, which is Chromium-specific and requires HTTPS or localhost.
 - GitHub Pages serves the **app code only**. Your Windows folder contents are accessed directly by the browser's local API; they are not added to Git or sent to GitHub.
@@ -64,7 +75,8 @@ Internal drag-and-drop currently uses a **copy-then-delete** fallback for moves.
 | Enter | Open folder / preview file |
 | Space | Toggle preview |
 | F2 | Rename |
-| Delete | Permanently delete (with confirmation) |
+| Delete | Move to Fold Trash; Undo available |
+| Shift+Delete | Permanently delete (with confirmation) |
 | Ctrl+C / Ctrl+X / Ctrl+V | Internal copy / cut / paste |
 | Ctrl+A | Select all |
 | Ctrl+Shift+N | New folder |
@@ -77,6 +89,12 @@ Internal drag-and-drop currently uses a **copy-then-delete** fallback for moves.
 | Ctrl+S (text editor) | Save edited file |
 | Tab (text editor) | Insert two spaces |
 
+## Testing and development
+
+`npm run check` runs static JavaScript syntax checks and dependency-free Node filesystem safety tests (Node 20+). This is **not** a real Windows filesystem compatibility test. GitHub runs the checks on branch pushes and PRs.
+
+- [Windows Chrome/Edge manual regression checklist](./tests/WINDOWS-CHECKLIST.md)
+- [Development roadmap](./logs/ROADMAP.md) and [dated work logs](./logs/README.md)
 ## Publishing
 
 This project is static. No Node, npm or CI is necessary. GitHub Pages serves it directly. Pushing a new version updates the app on its next online load; an installed PWA may require reopening once its service worker refreshes.
@@ -86,7 +104,9 @@ This project is static. No Node, npm or CI is necessary. GitHub Pages serves it 
 - `index.html` — semantic static shell
 - `styles.css` — restrained UI, virtual-row styles, theme variables
 - `app.js` — File System Access, virtual list, state, commands, previews
-- `fold-v3.js` — native drag gestures, permission-aware transfer, file-type badges, pane resize, preview/edit switching
+- `fold-v3.js` — drag gestures, file-type badges, pane resize, preview/edit switching
+- `file-ops.js` — staged, byte-verified local filesystem transfers
+- `tests/` — mock File System Access adapter, safety tests and Windows checklist
 - `manifest.webmanifest`, `sw.js`, `icons/` — installability/offline shell
 
 **Security:** There's no server API. Do not grant an untrusted copy of this app access to important folders. Start with a test folder. Any web app with granted `readwrite` folder access can modify those files.

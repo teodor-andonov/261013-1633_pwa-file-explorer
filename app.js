@@ -78,9 +78,30 @@ try{const f=await entry.handle.getFile();if(seq!==state.previewSeq||!state.previ
 else if(isText&&f.size<=2*1024*1024){visual=`<textarea id="preview-editor" class="preview-text" aria-label="Edit file" spellcheck="false"></textarea><button class="preview-save" id="preview-save" data-action="save-text" disabled>Save changes</button>`;}
 else visual=`<div class="preview-visual file-symbol">${svg(fileIcon(entry))}</div>`;
 el.innerHTML=`${visual}<div class="preview-name">${escapeHTML(f.name)}</div><div class="preview-meta">${escapeHTML(kind(entry))}</div><dl class="preview-details"><dt>Size</dt><dd>${formatSize(f.size)}</dd><dt>Modified</dt><dd>${formatDate(f.lastModified)}</dd><dt>Location</dt><dd>${escapeHTML([active()?.name,...(active()?.path??[])].join(' / '))}</dd></dl><div class="preview-actions"><button data-action="download">Save a copy</button><button data-action="rename">Rename</button></div>`;
-if(isText&&f.size<=2*1024*1024&&!isImage){const editor=$('preview-editor');if(editor){const contents=await f.text();if(seq!==state.previewSeq)return;editor.value=contents;editor.addEventListener('input',()=>{$('preview-save').disabled=editor.value===contents;});}}}
+if(isText&&f.size<=2*1024*1024&&!isImage){const editor=$('preview-editor');if(editor){const contents=await f.text();if(seq!==state.previewSeq)return;editor.value=contents;editor.dataset.sourceName=entry.name;editor.dataset.sourceModified=String(f.lastModified);editor.dataset.sourceSize=String(f.size);editor.addEventListener('input',()=>{$('preview-save').disabled=editor.value===contents;});}}}
 catch(e){if(seq===state.previewSeq)el.innerHTML=`<div class="empty">Could not preview: ${escapeHTML(e.message)}</div>`;}}
-async function saveText(){const entry=chosen(),editor=$('preview-editor');if(!entry||!editor)return;try{const writer=await entry.handle.createWritable();await writer.write(editor.value);await writer.close();$('preview-save').disabled=true;notify('Saved');await refreshCurrent(true);}catch(e){console.error(e);notify(`Save failed: ${e.message}`);}}
+async function saveText(){
+  const entry=chosen(),editor=$('preview-editor');
+  if(!entry||!editor||entry.handle.kind!=='file')return;
+  if(editor.dataset.sourceName&&editor.dataset.sourceName!==entry.name){
+    notify('Selection changed. Reopen the file before saving.');return;
+  }
+  try{
+    const current=await entry.handle.getFile();
+    if(editor.dataset.sourceModified!==undefined &&
+      (String(current.lastModified)!==editor.dataset.sourceModified ||
+       String(current.size)!==editor.dataset.sourceSize)){
+      notify('File changed on disk. Your unsaved edits are still in the editor; copy them before reopening.');
+      return;
+    }
+    const writer=await entry.handle.createWritable();
+    try{await writer.write(editor.value);await writer.close();}
+    catch(error){try{await writer.abort();}catch{}throw error;}
+    $('preview-save').disabled=true;
+    notify('Saved');
+    await refreshCurrent(true);
+  }catch(error){console.error(error);notify('Save failed: '+error.message);}
+}
 const filenameOK=(name)=>Boolean(name&&name!=='.'&&name!=='..'&&!/[\\/:*?"<>|\x00-\x1f]/.test(name)&&!/[. ]$/.test(name)&&!/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i.test(name));
 function modal({title,description='',value=null,confirm='Create',danger=false}){return new Promise(resolve=>{const host=$('modal-root');host.innerHTML=`<div class="modal-backdrop"><form class="modal"><h2>${escapeHTML(title)}</h2>${description?`<p>${escapeHTML(description)}</p>`:''}${value!==null?`<input id="modal-input" type="text" autocomplete="off" spellcheck="false" required>`:''}<div class="modal-buttons"><button type="button" data-modal-cancel>Cancel</button><button type="submit" class="${danger?'danger':'primary'}">${escapeHTML(confirm)}</button></div></form></div>`;const input=$('modal-input');if(input){input.value=value;input.focus();input.select();}else host.querySelector('[type="submit"]').focus();const close=(v)=>{document.removeEventListener('keydown',esc,true);host.innerHTML='';resolve(v);};host.querySelector('[data-modal-cancel]').onclick=()=>close(null);host.querySelector('.modal-backdrop').onclick=e=>{if(e.target.classList.contains('modal-backdrop'))close(null);};const esc=e=>{if(e.key==='Escape'){e.stopPropagation();close(null);}};document.addEventListener('keydown',esc,true);host.querySelector('form').onsubmit=e=>{e.preventDefault();close(input?input.value:true);};});}
 async function uniqueName(dir,requested){

@@ -172,3 +172,8 @@
 .fold-transfer-progress details{width:100%;color:var(--muted)}
 .fold-transfer-progress details summary{cursor:pointer;user-select:none}
 .fold-transfer-progress ul{margin:8px 0 2px;padding-left:18px;overflow-wrap:anywhere;max-height:27vh;overflow:auto}
+
+
+.fold-update-banner{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:94;display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);box-shadow:var(--shadow);font-size:12px}
+.fold-update-banner button{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:5px 9px}
+.fold-update-banner button:hover{background:var(--hover)}

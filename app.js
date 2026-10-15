@@ -261,7 +261,39 @@ document.addEventListener('keydown',e=>{const key=e.key.toLowerCase();const edit
 let dragLevel=0;const area=$('files-area');area.addEventListener('dragenter',e=>{if(!state.dir)return;e.preventDefault();dragLevel++;area.classList.add('drag-over');});area.addEventListener('dragover',e=>{if(!state.dir)return;e.preventDefault();e.dataTransfer.dropEffect='copy';});area.addEventListener('dragleave',e=>{dragLevel=Math.max(0,dragLevel-1);if(!dragLevel)area.classList.remove('drag-over');});area.addEventListener('drop',async e=>{if(!state.dir)return;e.preventDefault();dragLevel=0;area.classList.remove('drag-over');const items=[...e.dataTransfer.items];if(items.some(item=>typeof item.getAsFileSystemHandle==='function')){const pending=items.filter(i=>i.kind==='file').map(i=>i.getAsFileSystemHandle());const handles=(await Promise.all(pending)).filter(Boolean);if(handles.length){await importHandles(handles);return;}}await importFiles([...e.dataTransfer.files]);});
 document.querySelector('.roots').addEventListener('keydown',e=>{const root=e.target.closest('[data-root]');if(root&&(e.key==='Enter'||e.key===' ')){e.preventDefault();void switchRoot(root.dataset.root,true);}});
 }
-async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if(!['light','dark'].includes(theme))theme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';setTheme(theme);bindEvents();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(console.warn);if(!nativeSupported()){$('folder-title').textContent='Browser access unavailable';$('file-rows').innerHTML=`<div class="empty"><div class="empty-title">Chrome or Edge is required</div><div class="empty-sub">Use this app on Windows over HTTPS (or localhost). Browser file access is not available in this context.</div></div>`;notify('Folder access is not supported in this browser or context.');return;}state.roots=(await getStored('roots')||[]).map(r=>({...r,path:r.path??[],history:r.history??[r.path??[]],pos:r.pos??0}));state.activeId=await getStored('active');if(!state.roots.some(r=>r.id===state.activeId))state.activeId=state.roots[0]?.id??null;await showDirectory(false);}
+
+function offerFoldUpdate(){
+  if($('fold-update-banner'))return;
+  const banner=document.createElement('div');
+  banner.className='fold-update-banner';banner.id='fold-update-banner';
+  const label=document.createElement('span');label.textContent='Fold update ready';
+  const button=document.createElement('button');button.type='button';button.textContent='Reload';
+  button.addEventListener('click',()=>window.location.reload());
+  const dismiss=document.createElement('button');dismiss.type='button';dismiss.textContent='×';
+  dismiss.title='Later';dismiss.setAttribute('aria-label','Dismiss update notification');
+  dismiss.onclick=()=>banner.remove();
+  banner.append(label,button,dismiss);document.body.append(banner);
+}
+async function registerFoldServiceWorker(){
+  try{
+    const alreadyControlled=!!navigator.serviceWorker.controller;
+    const registration=await navigator.serviceWorker.register('./sw.js',{scope:'./'});
+    registration.addEventListener('updatefound',()=>{
+      const worker=registration.installing;
+      worker?.addEventListener('statechange',()=>{
+        if(worker.state==='installed'&&alreadyControlled)offerFoldUpdate();
+      });
+    });
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(alreadyControlled)offerFoldUpdate();
+    });
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden)registration.update().catch(console.warn);
+    });
+  }catch(error){console.warn('Fold offline shell unavailable',error);}
+}
+
+async function init(){setIcons();let theme=localStorage.getItem('fold-theme');if(!['light','dark'].includes(theme))theme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';setTheme(theme);bindEvents();if('serviceWorker' in navigator)void registerFoldServiceWorker();if(!nativeSupported()){$('folder-title').textContent='Browser access unavailable';$('file-rows').innerHTML=`<div class="empty"><div class="empty-title">Chrome or Edge is required</div><div class="empty-sub">Use this app on Windows over HTTPS (or localhost). Browser file access is not available in this context.</div></div>`;notify('Folder access is not supported in this browser or context.');return;}state.roots=(await getStored('roots')||[]).map(r=>({...r,path:r.path??[],history:r.history??[r.path??[]],pos:r.pos??0}));state.activeId=await getStored('active');if(!state.roots.some(r=>r.id===state.activeId))state.activeId=state.roots[0]?.id??null;await showDirectory(false);}
 (function installFoldFeatures(){
   // Fold v2: small, composable upgrades to the existing explorer, no runtime dependencies.
   const views = new Set(['list','table','gallery']);

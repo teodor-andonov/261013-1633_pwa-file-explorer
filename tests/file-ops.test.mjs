@@ -91,3 +91,42 @@ test('cancelled operation does not delete a source',async()=>{
   assert.equal(result.cancelled,true);assert.equal(result.moved,0);
   assert.deepEqual(children(src),['notes.md']);assert.deepEqual(children(dst),[]);
 });
+
+
+test('Fold Trash round trip restores a renamed file with verified bytes',async()=>{
+  const root=new MockDirectory('approved-root');
+  const folder=await root.addFolder('notes');
+  const original=await folder.addFile('draft.md','Important text');
+  const trash=await root.addFolder('.fold-trash');
+  const moved=await transferItems({
+    items:[{name:'draft.md',handle:original}],
+    sourceDir:folder,destinationDir:trash,mode:'move'
+  });
+  assert.equal(moved.moved,1);
+  assert.deepEqual(children(folder),[]);
+  assert.deepEqual(children(trash),['draft.md']);
+  const saved=await trash.getFileHandle('draft.md');
+  const restored=await transferItems({
+    items:[{name:'draft.md',handle:saved}],
+    sourceDir:trash,destinationDir:folder,mode:'move',renameTo:'draft.md'
+  });
+  assert.equal(restored.moved,1);
+  assert.deepEqual(children(folder),['draft.md']);
+  assert.deepEqual(children(trash),[]);
+  assert.equal((await (await folder.getFileHandle('draft.md')).getFile()).size,14);
+});
+
+test('Fold Trash failure keeps the original, not an unverified deletion',async()=>{
+  const root=new MockDirectory('approved-root');
+  const original=await root.addFile('important.txt','important');
+  const trash=await root.addFolder('.fold-trash');
+  trash.corruptWrites=true;
+  const report=await transferItems({
+    items:[{name:'important.txt',handle:original}],
+    sourceDir:root,destinationDir:trash,mode:'move'
+  });
+  assert.equal(report.moved,0);
+  assert.equal(report.failed[0].code,'VERIFY_FAILED');
+  assert(children(root).includes('important.txt'));
+  assert.deepEqual(children(trash),[]);
+});

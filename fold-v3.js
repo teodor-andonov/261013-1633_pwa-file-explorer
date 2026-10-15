@@ -60,7 +60,7 @@ export function enhancePreview({$,svg,chosen,ext,act}) {
 }
 export function installV3(api){
   const {state,$,fileList,notify,svg,active,getSelected,selectIndex,ensurePermission,getDir,
-    uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext}=api;
+    uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext,runTransfer}=api;
   const left=$('sidebar-resizer'),right=$('preview-resizer');
   const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
   const railSetting=Number(localStorage.getItem('fold-rail-width'));
@@ -239,24 +239,14 @@ export function installV3(api){
       const {root,path}=target;
       if(!await ensurePermission(root.handle,true))throw Error('Destination folder permission required.');
       const dir=await getDir({...root,path});
-      if(!copy&&await job.parent.isSameEntry(dir)){notify('Already in this folder.');return;}
-      let finished=0;const errors=[];
-      for(const item of job.items){
-        let destinationName=null;
-        try{
-          if(await isDescendantOf(dir,item.handle))throw Error('Cannot place a folder inside itself.');
-          destinationName=await uniqueName(dir,item.name);
-          await copyEntry(item.handle,dir,destinationName);
-          if(!copy)await job.parent.removeEntry(item.name,{recursive:item.handle.kind==='directory'});
-          finished++;
-        }catch(error){
-          // Copies can fail midway. Do not remove the source on error.
-          errors.push(item.name+': '+error.message);
-          // A partial target may exist. Leave it untouched for inspection rather than erasing data.
-        }
-      }
+      const report=await runTransfer({
+        items:job.items,
+        sourceDir:job.parent,
+        destinationDir:dir,
+        mode:copy?'copy':'move'
+      });
       await refreshCurrent(true);
-      notify(errors.length?finished+' transferred · '+errors.length+' failed ('+errors[0]+')':finished+' item'+(finished===1?'':'s')+(copy?' copied':' moved'));
+      if(report.failed.length)console.warn('Drag/drop transfer issues',report);
     }catch(err){console.error('Fold drop',err);notify('Transfer failed: '+err.message);}
   }
   // A read-only image preview is double-clicked to start image editing/sketching.

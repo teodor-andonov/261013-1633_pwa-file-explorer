@@ -1,3 +1,4 @@
+import {transferItems} from './file-ops.js';
 import {typeIcon,enhancePreview,installV3} from './fold-v3.js';
 // Fold — a dependency-free desktop Chromium file explorer.
 // Files remain on the user's computer. Only approved directory handles are retained in IndexedDB.
@@ -100,15 +101,68 @@ async function uniqueName(dir,requested){
   }
 }
 async function createNew(kindToCreate){if(!state.dir)return;const initial=kindToCreate==='directory'?'New folder':'Untitled.md';const name=(await modal({title:`New ${kindToCreate==='directory'?'folder':'file'}`,value:initial}))?.trim();if(name==null)return;if(!filenameOK(name)){notify('Invalid Windows filename.');return;}try{if(await uniqueName(state.dir,name)!==name){notify('A file or folder already has that name.');return;}if(kindToCreate==='directory')await state.dir.getDirectoryHandle(name,{create:true});else{const handle=await state.dir.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.close();}await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}catch(e){notify(`Creation failed: ${e.message}`);}}
+
+function transferProgress(data){
+  let el=document.getElementById('fold-transfer-progress');
+  if(!el){el=document.createElement('div');el.id='fold-transfer-progress';el.className='fold-transfer-progress';el.setAttribute('role','status');document.body.append(el);}
+  if(data.phase==='finished'){el.hidden=true;return;}
+  const names={copying:'Copying',verifying:'Checking',publishing:'Publishing','verifying-final':'Verifying','removing-source':'Removing original',completed:'Finished',failed:'Issue'};
+  el.hidden=false;el.textContent=(names[data.phase]||'Working')+' · '+Math.min(data.completed+1,data.total)+' / '+data.total+' · '+data.item;
+}
+function transferResult(report){
+  transferProgress({phase:'finished'});
+  if(report.failed.length){console.warn('Fold file operations:',report);notify(report.completed+'/'+report.total+' done · '+report.failed[0].message);}
+  else notify(report.completed+' file operation(s) completed');
+  if(report.warnings.length){console.warn('Fold cleanup:',report.warnings);notify('Transfer cleanup warning. Check console.');}
+  return report;
+}
+async function runTransfer(options){
+  return transferResult(await transferItems({...options,onProgress:transferProgress}));
+}
+
 async function copyEntry(source,dest,name){if(source.kind==='file'){const srcFile=await source.getFile();const output=await dest.getFileHandle(name,{create:true});const stream=await output.createWritable();try{await stream.write(srcFile);await stream.close();}catch(e){await stream.abort().catch(()=>{});throw e;}return;}const target=await dest.getDirectoryHandle(name,{create:true});for await(const [childName,child] of source.entries())await copyEntry(child,target,childName);}
 async function isDescendantOf(dest,source){if(source.kind!=='directory')return false;try{return (await source.resolve(dest))!==null;}catch{return false;}}
-async function renameSelected(){const entry=chosen();if(!entry||!state.dir)return;const old=entry.name;const name=(await modal({title:'Rename',value:old,confirm:'Rename',description:'Folder renaming may copy then remove the original. Larger folders can take time.'}))?.trim();if(name==null||name===old)return;if(!filenameOK(name)){notify('Invalid Windows filename.');return;}try{if(await uniqueName(state.dir,name)!==name){notify('That name is already in use.');return;}if(typeof entry.handle.move==='function'){try{await entry.handle.move(name);await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();notify('Renamed');return;}catch(e){if(!['NotSupportedError','InvalidModificationError','NotAllowedError'].includes(e.name))throw e;}}
-await copyEntry(entry.handle,state.dir,name);await state.dir.removeEntry(old,{recursive:entry.handle.kind==='directory'});await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();notify('Renamed');}catch(e){console.error(e);notify(`Rename failed: ${e.message}`);}}
+async function renameSelected(){
+  const entry=chosen();if(!entry||!state.dir)return;
+  const old=entry.name;
+  const name=(await modal({title:'Rename',value:old,confirm:'Rename',description:'If native rename is unavailable, Fold verifies a full copy before removing the original.'}))?.trim();
+  if(name==null||name===old)return;
+  if(!filenameOK(name)){notify('Invalid Windows filename.');return;}
+  if(await uniqueName(state.dir,name)!==name){notify('That name is already in use.');return;}
+  try{
+    if(typeof entry.handle.move==='function'){
+      try{await entry.handle.move(name);await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();notify('Renamed');return;}
+      catch(e){if(!['NotSupportedError','InvalidModificationError','NotAllowedError'].includes(e.name))throw e;}
+    }
+    const result=await runTransfer({items:[{name:old,handle:entry.handle}],sourceDir:state.dir,destinationDir:state.dir,mode:'move',renameTo:name});
+    if(result.outputs.length){await refreshCurrent();state.selected=new Set([name]);renderVirtual();updateStatus();}
+  }catch(e){console.error(e);notify('Rename failed: '+e.message);}
+}
 function prepareClipboard(cut){const sel=getSelected();if(!sel.length||!state.dir)return;state.clipboard={items:sel.map(e=>({name:e.name,handle:e.handle,parent:state.dir,rootId:active().id,path:[...active().path]})),cut};notify(`${sel.length} item${sel.length>1?'s':''} ${cut?'cut':'copied'}`);updateStatus();}
-async function pasteClipboard(){if(!state.clipboard||!state.dir)return;const clipboard=state.clipboard,destination=state.dir;let count=0,errors=[];for(const item of clipboard.items){try{if(clipboard.cut&&await item.parent.isSameEntry(destination))continue;if(await isDescendantOf(destination,item.handle))throw Error('Cannot copy a folder into itself.');const name=await uniqueName(destination,item.name);await copyEntry(item.handle,destination,name);if(clipboard.cut)await item.parent.removeEntry(item.name,{recursive:item.handle.kind==='directory'});count++;}catch(e){console.error(e);errors.push(`${item.name}: ${e.message}`);}}if(clipboard.cut&&!errors.length)state.clipboard=null;await refreshCurrent();notify(errors.length?`${count} completed · ${errors.length} failed. ${errors[0]}`:`${count} item${count===1?'':'s'} pasted`);updateStatus();}
+async function pasteClipboard(){
+  if(!state.clipboard||!state.dir)return;
+  const clip=state.clipboard;
+  const byParent=new Map();
+  for(const item of clip.items){if(!byParent.has(item.parent))byParent.set(item.parent,[]);byParent.get(item.parent).push({name:item.name,handle:item.handle});}
+  try{
+    let allPassed=true;
+    for(const [sourceDir,items] of byParent){
+      const result=await runTransfer({items,sourceDir,destinationDir:state.dir,mode:clip.cut?'move':'copy'});
+      if(result.failed.length||result.cancelled||result.warnings.length)allPassed=false;
+    }
+    if(clip.cut&&allPassed)state.clipboard=null;
+    await refreshCurrent();updateStatus();
+  }catch(e){console.error(e);notify('Paste failed: '+e.message);}
+}
 async function deleteSelected(){const items=getSelected();if(!items.length||!state.dir)return;const names=items.slice(0,3).map(e=>e.name).join(', ')+(items.length>3?'…':'');const agreed=await modal({title:`Permanently delete ${items.length} item${items.length>1?'s':''}?`,description:`${names}\n\nThis does NOT go to the Windows Recycle Bin and cannot be undone.`,value:null,confirm:'Delete permanently',danger:true});if(!agreed)return;let failed=0;for(const e of items){try{await state.dir.removeEntry(e.name,{recursive:e.handle.kind==='directory'});}catch(err){console.error(err);failed++;}}await refreshCurrent();notify(failed?`${failed} item(s) could not be deleted`:'Deleted permanently');}
 async function importFiles(files){if(!state.dir||!files?.length)return;let done=0,failed=0;for(const file of files){try{const name=await uniqueName(state.dir,file.name);const handle=await state.dir.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.write(file);await writer.close();done++;}catch(e){console.error(e);failed++;}}await refreshCurrent();notify(`${done} file${done===1?'':'s'} imported${failed?`, ${failed} failed`:''}`);}
-async function importHandles(handles){if(!state.dir||!handles.length)return;let done=0,failed=0;for(const handle of handles){try{if(await isDescendantOf(state.dir,handle))throw Error('Cannot copy folder into itself.');const name=await uniqueName(state.dir,handle.name);await copyEntry(handle,state.dir,name);done++;}catch(e){console.error(e);failed++;}}await refreshCurrent();notify(`${done} item${done===1?'':'s'} imported${failed?`, ${failed} failed`:''}`);}
+async function importHandles(handles){
+  if(!state.dir||!handles.length)return;
+  try{
+    await runTransfer({items:handles.map(handle=>({name:handle.name,handle})),sourceDir:state.dir,destinationDir:state.dir,mode:'copy'});
+    await refreshCurrent();
+  }catch(e){console.error(e);notify('Import failed: '+e.message);}
+}
 async function downloadSelected(){const entry=chosen();if(!entry||entry.handle.kind!=='file')return;try{const file=await entry.handle.getFile();const url=URL.createObjectURL(file);const a=document.createElement('a');a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){notify(`Download failed: ${e.message}`);}}
 async function refreshCurrent(keepSelection=false){const selected=keepSelection?[...state.selected]:[];await showDirectory(false);if(keepSelection){state.selected=new Set(selected.filter(n=>state.entries.some(e=>e.name===n)));renderVirtual();updateStatus();}}
 function menu(items,x,y){const ctx=$('context');ctx.innerHTML=items.map(item=>item.divider?'<div class="menu-divider"></div>':`<button role="menuitem" class="menu-item ${item.danger?'danger':''}" data-menu="${item.action}" ${item.disabled?'disabled':''}>${svg(item.icon||'file')}<span>${escapeHTML(item.label)}</span>${item.key?`<kbd>${escapeHTML(item.key)}</kbd>`:''}</button>`).join('');ctx.hidden=false;const rect=ctx.getBoundingClientRect();ctx.style.left=`${Math.max(8,Math.min(x,innerWidth-rect.width-8))}px`;ctx.style.top=`${Math.max(8,Math.min(y,innerHeight-rect.height-8))}px`;}
@@ -689,5 +743,5 @@ renderPreview=async function(){
   enhancePreview({$,svg,chosen,ext,act});
 };
 installV3({state,$,fileList,notify,svg,active,getSelected,selectIndex,
-  ensurePermission,getDir,uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext,renderVirtual});
+  ensurePermission,getDir,uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext,renderVirtual,runTransfer});
 void init();

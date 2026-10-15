@@ -162,6 +162,7 @@ export async function transferItems({
         try {
           await temporary.move(destinationDir,target);
           published=await lookup(destinationDir,target);
+          if(published)createdFinal=target;
         }catch(error) {
           if(!['NotSupportedError','InvalidModificationError','NotAllowedError'].includes(error?.name))
             throw error;

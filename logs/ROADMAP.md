@@ -1,6 +1,6 @@
 # Fold — roadmap
 
-**Updated:** 2026-10-15 · **Scope:** Windows 11, current Chrome/Edge, installable PWA · **Status:** working plan (not a release certification)
+**Updated:** 2026-10-15 · **Scope:** Windows 11, current Chrome/Edge, installable PWA · **Status:** reliability cycle implemented and CI-tested; Windows regression outstanding
 
 ## North star
 
@@ -25,13 +25,13 @@ Implemented in code (not fully browser-regression-tested): folder tabs, breadcru
 
 ## Priority 0 — Trust the fundamentals
 
-**Target: reliability milestone (v0.5).** Do this before more interface features.
+**Target: reliability milestone (v0.5).** Implemented portions are tracked below, but the milestone is **not released or accepted** until the Windows manual checklist is executed.
 
-- [ ] **F-001 · Real desktop regression pass.** Test Windows Chrome and Edge using a disposable directory tree: open/close/reopen tabs and permissions; navigation; selection; filters; all views; resizing; grouping; copy/cut/paste; drag-drop; rename; delete; editors; JPG/PNG Save and Save copy. Record failures with reproduction steps and browser version.
-- [ ] **F-002 · Safer move/copy engine.** Prevent self/descendant moves; check destination permissions; handle collisions, partial copies and interrupted operations. Never delete a source until its copied destination has been verified. Show progress and an honest error report for large trees.
-- [ ] **F-003 · Safer destructive actions.** Clarify or improve undo/trash strategy within the browser sandbox; retain explicit confirmation for genuinely permanent removal. Guard overwritten image/text files against external changes; clearly indicate unsaved edits.
-- [ ] **F-004 · PWA update correctness.** Check fresh installs, offline load, and updates without stale mixed JS/CSS/service-worker assets. Make update/reload feedback unobtrusive.
-- [ ] **F-005 · Small regression test harness.** Add a deterministic automated smoke-test setup (e.g. Playwright with a mock File System Access adapter, plus a short real-browser manual checklist).
+- [ ] **F-001 · Real desktop regression pass (not yet run).** Test Windows Chrome and Edge using a disposable directory tree: open/close/reopen tabs and permissions; navigation; selection; filters; all views; resizing; grouping; copy/cut/paste; drag-drop; rename; delete; editors; JPG/PNG Save and Save copy. Record failures with reproduction steps and browser version.
+- [ ] **F-002 · Safer move/copy engine (implemented; 12 synthetic tests pass, Windows verification pending).** Prevent self/descendant moves; check destination permissions; handle collisions, partial copies and interrupted operations. Never delete a source until its copied destination has been verified. Show progress and an honest error report for large trees.
+- [ ] **F-003 · Safer destructive actions (Fold Trash, Undo and editor external-change guards implemented; Windows verification pending).** Clarify or improve undo/trash strategy within the browser sandbox; retain explicit confirmation for genuinely permanent removal. Guard overwritten image/text files against external changes; clearly indicate unsaved edits.
+- [ ] **F-004 · PWA update correctness (new-module precache and reload prompt implemented; offline/install behaviour unverified).** Check fresh installs, offline load, and updates without stale mixed JS/CSS/service-worker assets. Make update/reload feedback unobtrusive.
+- [x] **F-005 · Small regression test harness (Node mock filesystem + CI + manual Windows checklist).** Add a deterministic automated smoke-test setup (e.g. Playwright with a mock File System Access adapter, plus a short real-browser manual checklist).
 
 **Exit criteria:** repeated operations on a test tree produce the correct files with no unexplained data loss; permission and failure states are understandable; deployed updates are repeatable. Do not mark done on syntax tests alone.
 
@@ -83,4 +83,4 @@ Implemented in code (not fully browser-regression-tested): folder tabs, breadcru
 4. Treat **implemented**, **tested**, and **released** as different statuses.
 5. Keep a clear link from task → commit/PR → test evidence → decision.
 
-**Recommended next action:** **F-001** (desktop regression on disposable files), immediately followed by **F-002** where move/copy reliability fails. New features are less valuable than safe, predictable file operations.
+**Recommended next action:** **F-001** — execute [the Windows Chrome/Edge checklist](../tests/WINDOWS-CHECKLIST.md) on disposable folders and record results. The [2026-10-15 reliability log](./2026-10-15-reliability-pass.md) distinguishes implementation from verification. Keep F-002/F-003/F-004 open until that evidence exists; repair any data-safety bugs before cosmetic work.

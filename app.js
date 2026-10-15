@@ -223,7 +223,95 @@ async function pasteClipboard(){
     await refreshCurrent();updateStatus();
   }catch(e){console.error(e);notify('Paste failed: '+e.message);}
 }
-async function deleteSelected(){const items=getSelected();if(!items.length||!state.dir)return;const names=items.slice(0,3).map(e=>e.name).join(', ')+(items.length>3?'…':'');const agreed=await modal({title:`Permanently delete ${items.length} item${items.length>1?'s':''}?`,description:`${names}\n\nThis does NOT go to the Windows Recycle Bin and cannot be undone.`,value:null,confirm:'Delete permanently',danger:true});if(!agreed)return;let failed=0;for(const e of items){try{await state.dir.removeEntry(e.name,{recursive:e.handle.kind==='directory'});}catch(err){console.error(err);failed++;}}await refreshCurrent();notify(failed?`${failed} item(s) could not be deleted`:'Deleted permanently');}
+async function deletePermanently(){
+  const items=getSelected();
+  if(!items.length||!state.dir)return;
+  const names=items.slice(0,3).map(e=>e.name).join(', ')+(items.length>3?'…':'');
+  const agreed=await modal({
+    title:'Permanently delete '+items.length+' item(s)?',
+    description:names+'\n\nThis bypasses Fold Trash and the Windows Recycle Bin. It cannot be undone.',
+    value:null,confirm:'Delete permanently',danger:true
+  });
+  if(!agreed)return;
+  let failed=0;
+  for(const item of items){
+    try{await state.dir.removeEntry(item.name,{recursive:item.handle.kind==='directory'});}
+    catch(error){console.error(error);failed++;}
+  }
+  await refreshCurrent();
+  notify(failed?failed+' item(s) could not be deleted':'Deleted permanently');
+}
+
+async function deleteSelected(){
+  const items=getSelected();
+  if(!items.length||!state.dir)return;
+  if(active()?.path[0]==='.fold-trash')return deletePermanently();
+  if(items.some(item=>item.name==='.fold-trash')){
+    notify('Fold Trash cannot be moved inside itself.');return;
+  }
+  const root=active();
+  if(!root)return;
+  try{
+    if(!await ensurePermission(root.handle,true)){
+      notify('Folder write access required.');return;
+    }
+    const trash=await root.handle.getDirectoryHandle('.fold-trash',{create:true});
+    const sourceDir=state.dir;
+    const originalPath=[...root.path];
+    const report=await runTransfer({
+      items:items.map(item=>({name:item.name,handle:item.handle})),
+      sourceDir,destinationDir:trash,mode:'move'
+    });
+    if(!report)return;
+    const completed=report.outputs.filter(output=>output.kind==='move'&&!output.retainedSource);
+    if(completed.length){
+      state.lastTrash={rootId:root.id,trash,sourceDir,originalPath,
+        items:completed.map(output=>({trashName:output.target,originalName:output.name}))};
+      showTrashUndo(completed.length);
+    }
+    await refreshCurrent();
+  }catch(error){console.error(error);notify('Could not move to Fold Trash: '+error.message);}
+}
+
+function showTrashUndo(count){
+  let panel=$('fold-trash-undo');
+  if(!panel){
+    panel=document.createElement('div');panel.id='fold-trash-undo';
+    panel.className='fold-trash-undo';document.body.append(panel);
+  }
+  panel.replaceChildren();
+  const text=document.createElement('span');text.textContent=count+' item(s) moved to Fold Trash';
+  const undo=document.createElement('button');undo.textContent='Undo';undo.type='button';
+  undo.onclick=()=>void undoTrash();
+  const close=document.createElement('button');close.textContent='×';close.type='button';
+  close.title='Dismiss';close.onclick=()=>panel.remove();
+  panel.append(text,undo,close);
+}
+
+async function undoTrash(){
+  const record=state.lastTrash;
+  if(!record?.items?.length)return;
+  const remaining=[];
+  for(const item of record.items){
+    try{
+      const handle=await record.trash.getFileHandle(item.trashName).catch(async error=>{
+        if(error.name==='TypeMismatchError')return record.trash.getDirectoryHandle(item.trashName);
+        throw error;
+      });
+      const report=await runTransfer({
+        items:[{name:item.trashName,handle}],
+        sourceDir:record.trash,destinationDir:record.sourceDir,
+        mode:'move',renameTo:item.originalName
+      });
+      if(!report||report.failed.length||!report.moved)remaining.push(item);
+    }catch(error){console.error(error);remaining.push(item);}
+  }
+  record.items=remaining;
+  if(!remaining.length){
+    state.lastTrash=null;$('fold-trash-undo')?.remove();notify('Restored from Fold Trash');
+  }else showTrashUndo(remaining.length);
+  if(state.activeId===record.rootId)await refreshCurrent();
+}
 async function importFiles(files){if(!state.dir||!files?.length)return;let done=0,failed=0;for(const file of files){try{const name=await uniqueName(state.dir,file.name);const handle=await state.dir.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.write(file);await writer.close();done++;}catch(e){console.error(e);failed++;}}await refreshCurrent();notify(`${done} file${done===1?'':'s'} imported${failed?`, ${failed} failed`:''}`);}
 async function importHandles(handles){
   if(!state.dir||!handles.length)return;
@@ -249,14 +337,14 @@ async function openFolderInTab(){
     await showDirectory(true);
   }catch(error){console.error('Open new tab:',error);notify('Could not open folder in a new tab: '+error.message);}
 }
-const fileMenu=()=>[{action:'open-selected',icon:'preview',label:'Open / preview',key:'Enter'},{action:'open-in-tab',icon:'plusFolder',label:'Open in new tab',disabled:getSelected().length!==1||chosen()?.handle.kind!=='directory'},{action:'annotate-image',icon:'pen',label:'Annotate / sketch',disabled:chosen()?.handle.kind!=='file'||!['png','jpg','jpeg'].includes(ext(chosen()?.name||''))},{action:'rename',icon:'rename',label:'Rename',key:'F2'}, {divider:true},{action:'copy',icon:'copy',label:'Copy',key:'Ctrl+C'},{action:'cut',icon:'scissors',label:'Cut',key:'Ctrl+X'},{action:'paste',icon:'paste',label:'Paste into current folder',key:'Ctrl+V',disabled:!state.clipboard},{divider:true},{action:'download',icon:'download',label:'Save a copy',disabled:getSelected().length!==1||chosen()?.handle.kind!=='file'},{action:'delete',icon:'trash',label:'Delete permanently',key:'Del',danger:true}];
+const fileMenu=()=>[{action:'open-selected',icon:'preview',label:'Open / preview',key:'Enter'},{action:'open-in-tab',icon:'plusFolder',label:'Open in new tab',disabled:getSelected().length!==1||chosen()?.handle.kind!=='directory'},{action:'annotate-image',icon:'pen',label:'Annotate / sketch',disabled:chosen()?.handle.kind!=='file'||!['png','jpg','jpeg'].includes(ext(chosen()?.name||''))},{action:'rename',icon:'rename',label:'Rename',key:'F2'}, {divider:true},{action:'copy',icon:'copy',label:'Copy',key:'Ctrl+C'},{action:'cut',icon:'scissors',label:'Cut',key:'Ctrl+X'},{action:'paste',icon:'paste',label:'Paste into current folder',key:'Ctrl+V',disabled:!state.clipboard},{divider:true},{action:'download',icon:'download',label:'Save a copy',disabled:getSelected().length!==1||chosen()?.handle.kind!=='file'},{action:'delete',icon:'trash',label:'Move to Fold Trash',key:'Del'},{action:'delete-permanent',icon:'trash',label:'Delete permanently',key:'Shift+Del',danger:true}];
 const blankMenu=()=>[{action:'new-folder',icon:'plusFolder',label:'New folder',key:'Ctrl+Shift+N'},{action:'new-file',icon:'newFile',label:'New Markdown file'},{action:'new-image',icon:'photoPlus',label:'New white JPG'}, {action:'import',icon:'upload',label:'Import files'},{divider:true},{action:'paste',icon:'paste',label:'Paste',key:'Ctrl+V',disabled:!state.clipboard},{action:'refresh',icon:'refresh',label:'Refresh',key:'F5'}];
-async function act(action){$('context').hidden=true;switch(action){case 'add-root':return openNewRoot();case 'theme':return setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');case 'grant':return showDirectory(true);case 'refresh':return refreshCurrent(true);case 'back':return navigateDelta(-1);case 'forward':return navigateDelta(1);case 'up':{const r=active();if(r?.path.length)historyTo(r.path.slice(0,-1));return;}case 'new-folder':return createNew('directory');case 'new-file':return createNew('file');case 'import':return $('upload-input').click();case 'rename':return renameSelected();case 'copy':return prepareClipboard(false);case 'cut':return prepareClipboard(true);case 'paste':return pasteClipboard();case 'delete':return deleteSelected();case 'download':return downloadSelected();case 'save-text':return saveText();case 'toggle-preview':state.previewOpen=!state.previewOpen;updatePreviewState();return;case 'close-preview':state.previewOpen=false;updatePreviewState();return;case 'open-in-tab':return openFolderInTab();case 'open-selected':{const e=chosen();if(!e)return;const i=state.visible.findIndex(x=>x.name===e.name);if(i>=0)return openIndex(i);return;}case 'more':{const r=$('more-button').getBoundingClientRect();return menu(blankMenu().concat([{divider:true},{action:'select-all',icon:'check',label:'Select all',key:'Ctrl+A'}]),r.left,r.bottom+7);}case 'select-all':state.selected=new Set(state.visible.map(e=>e.name));state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();return;case 'shortcuts':return modal({title:'Keyboard shortcuts',description:'Enter: Open / preview\nSpace: Toggle preview\nF2: Rename\nDelete: Delete permanently\nCtrl+C / X / V: Internal copy, cut, paste\nCtrl+A: Select all\nCtrl+Shift+N: New folder\nAlt+Left / Right / Up: Navigate\n/: Focus filter\nF5: Refresh\nEsc: Clear selection',value:null,confirm:'Close'});}}
+async function act(action){$('context').hidden=true;switch(action){case 'add-root':return openNewRoot();case 'theme':return setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');case 'grant':return showDirectory(true);case 'refresh':return refreshCurrent(true);case 'back':return navigateDelta(-1);case 'forward':return navigateDelta(1);case 'up':{const r=active();if(r?.path.length)historyTo(r.path.slice(0,-1));return;}case 'new-folder':return createNew('directory');case 'new-file':return createNew('file');case 'import':return $('upload-input').click();case 'rename':return renameSelected();case 'copy':return prepareClipboard(false);case 'cut':return prepareClipboard(true);case 'paste':return pasteClipboard();case 'delete':return deleteSelected();case 'delete-permanent':return deletePermanently();case 'download':return downloadSelected();case 'save-text':return saveText();case 'toggle-preview':state.previewOpen=!state.previewOpen;updatePreviewState();return;case 'close-preview':state.previewOpen=false;updatePreviewState();return;case 'open-in-tab':return openFolderInTab();case 'open-selected':{const e=chosen();if(!e)return;const i=state.visible.findIndex(x=>x.name===e.name);if(i>=0)return openIndex(i);return;}case 'more':{const r=$('more-button').getBoundingClientRect();return menu(blankMenu().concat([{divider:true},{action:'select-all',icon:'check',label:'Select all',key:'Ctrl+A'}]),r.left,r.bottom+7);}case 'select-all':state.selected=new Set(state.visible.map(e=>e.name));state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();return;case 'shortcuts':return modal({title:'Keyboard shortcuts',description:'Enter: Open / preview\nSpace: Toggle preview\nF2: Rename\nDelete: Move to Fold Trash\nShift+Delete: Delete permanently\nCtrl+C / X / V: Internal copy, cut, paste\nCtrl+A: Select all\nCtrl+Shift+N: New folder\nAlt+Left / Right / Up: Navigate\n/: Focus filter\nF5: Refresh\nEsc: Clear selection',value:null,confirm:'Close'});}}
 function bindEvents(){document.addEventListener('click',e=>{const menuItem=e.target.closest('[data-menu]');if(menuItem){void act(menuItem.dataset.menu);return;}if(!$('context').contains(e.target))$('context').hidden=true;const close=e.target.closest('[data-close]');if(close){e.stopPropagation();void closeRoot(close.dataset.close);return;}const root=e.target.closest('[data-root]');if(root){void switchRoot(root.dataset.root,true);return;}const crumb=e.target.closest('[data-crumb]');if(crumb){const r=active();if(r)historyTo(r.path.slice(0,Number(crumb.dataset.crumb)));return;}const action=e.target.closest('[data-action]');if(action){void act(action.dataset.action);return;}const row=e.target.closest('[data-row]');if(row){selectIndex(Number(row.dataset.row),{ctrl:e.ctrlKey||e.metaKey,shift:e.shiftKey});return;}if(e.target.closest('#file-scroller')&&state.dir){state.selected.clear();state.previewName=null;renderVirtual();updateStatus();if(state.previewOpen)void renderPreview();}});
 fileList.addEventListener('dblclick',e=>{const row=e.target.closest('[data-row]');if(row)void openIndex(Number(row.dataset.row));});
 document.addEventListener('contextmenu',e=>{const root=e.target.closest('[data-root]');if(root){e.preventDefault();menu([{action:'close-root',icon:'trash',label:'Close folder tab'}],e.clientX,e.clientY);const closeId=root.dataset.root;$('context').querySelector('[data-menu="close-root"]').onclick=()=>{ $('context').hidden=true;void closeRoot(closeId);};return;}const row=e.target.closest('[data-row]');if(row){e.preventDefault();const i=Number(row.dataset.row);if(!state.selected.has(state.visible[i].name))selectIndex(i);menu(fileMenu(),e.clientX,e.clientY);return;}if(e.target.closest('#files-area')&&state.dir){e.preventDefault();menu(blankMenu(),e.clientX,e.clientY);}});
 fileList.addEventListener('scroll',requestRender,{passive:true});window.addEventListener('resize',requestRender);$('search').addEventListener('input',e=>{state.query=e.target.value;renderList(true);});$('upload-input').addEventListener('change',async e=>{await importFiles([...e.target.files]);e.target.value='';});document.querySelectorAll('[data-sort]').forEach(el=>el.addEventListener('click',()=>{const sort=el.dataset.sort;if(state.sort===sort)state.direction*=-1;else{state.sort=sort;state.direction=1;}sortEntries();renderList();}));
-document.addEventListener('keydown',e=>{const key=e.key.toLowerCase();const editing=e.target.closest('input,textarea,[contenteditable="true"]');if($('modal-root').children.length)return;if(e.key==='Escape'){$('context').hidden=true;if(editing){if(e.target===$('search')){$('search').value='';state.query='';renderList(true);}return;}state.selected.clear();renderVirtual();updateStatus();return;}if(editing){if(e.ctrlKey&&key==='s'&&e.target.id==='preview-editor'){e.preventDefault();void saveText();}return;}if(key==='/'&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();return;}if(!active())return;if(e.key==='F5'){e.preventDefault();void act('refresh');return;}if(e.altKey&&e.key==='ArrowLeft'){e.preventDefault();void act('back');return;}if(e.altKey&&e.key==='ArrowRight'){e.preventDefault();void act('forward');return;}if(e.altKey&&e.key==='ArrowUp'){e.preventDefault();void act('up');return;}if(e.ctrlKey&&e.shiftKey&&key==='n'){e.preventDefault();void act('new-folder');return;}if(e.ctrlKey&&key==='a'){e.preventDefault();void act('select-all');return;}if(e.ctrlKey&&['c','x','v'].includes(key)){e.preventDefault();void act(key==='c'?'copy':key==='x'?'cut':'paste');return;}if(e.key==='F2'){e.preventDefault();void act('rename');return;}if(e.key==='Delete'){e.preventDefault();void act('delete');return;}if(e.key==='Enter'){e.preventDefault();void act('open-selected');return;}if(e.code==='Space'){e.preventDefault();void act('toggle-preview');return;}if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const index=state.visible.findIndex(x=>x.name===[...state.selected][0]);const next=Math.max(0,Math.min(state.visible.length-1,index+(e.key==='ArrowDown'?1:-1)));selectIndex(next,{shift:e.shiftKey});const rowSize=state.itemSize||40;const target=next*rowSize;if(target<fileList.scrollTop)fileList.scrollTop=target;else if(target+rowSize>fileList.scrollTop+fileList.clientHeight)fileList.scrollTop=target-fileList.clientHeight+rowSize;}});
+document.addEventListener('keydown',e=>{const key=e.key.toLowerCase();const editing=e.target.closest('input,textarea,[contenteditable="true"]');if($('modal-root').children.length)return;if(e.key==='Escape'){$('context').hidden=true;if(editing){if(e.target===$('search')){$('search').value='';state.query='';renderList(true);}return;}state.selected.clear();renderVirtual();updateStatus();return;}if(editing){if(e.ctrlKey&&key==='s'&&e.target.id==='preview-editor'){e.preventDefault();void saveText();}return;}if(key==='/'&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();return;}if(!active())return;if(e.key==='F5'){e.preventDefault();void act('refresh');return;}if(e.altKey&&e.key==='ArrowLeft'){e.preventDefault();void act('back');return;}if(e.altKey&&e.key==='ArrowRight'){e.preventDefault();void act('forward');return;}if(e.altKey&&e.key==='ArrowUp'){e.preventDefault();void act('up');return;}if(e.ctrlKey&&e.shiftKey&&key==='n'){e.preventDefault();void act('new-folder');return;}if(e.ctrlKey&&key==='a'){e.preventDefault();void act('select-all');return;}if(e.ctrlKey&&['c','x','v'].includes(key)){e.preventDefault();void act(key==='c'?'copy':key==='x'?'cut':'paste');return;}if(e.key==='F2'){e.preventDefault();void act('rename');return;}if(e.key==='Delete'){e.preventDefault();void act(e.shiftKey?'delete-permanent':'delete');return;}if(e.key==='Enter'){e.preventDefault();void act('open-selected');return;}if(e.code==='Space'){e.preventDefault();void act('toggle-preview');return;}if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const index=state.visible.findIndex(x=>x.name===[...state.selected][0]);const next=Math.max(0,Math.min(state.visible.length-1,index+(e.key==='ArrowDown'?1:-1)));selectIndex(next,{shift:e.shiftKey});const rowSize=state.itemSize||40;const target=next*rowSize;if(target<fileList.scrollTop)fileList.scrollTop=target;else if(target+rowSize>fileList.scrollTop+fileList.clientHeight)fileList.scrollTop=target-fileList.clientHeight+rowSize;}});
 let dragLevel=0;const area=$('files-area');area.addEventListener('dragenter',e=>{if(!state.dir)return;e.preventDefault();dragLevel++;area.classList.add('drag-over');});area.addEventListener('dragover',e=>{if(!state.dir)return;e.preventDefault();e.dataTransfer.dropEffect='copy';});area.addEventListener('dragleave',e=>{dragLevel=Math.max(0,dragLevel-1);if(!dragLevel)area.classList.remove('drag-over');});area.addEventListener('drop',async e=>{if(!state.dir)return;e.preventDefault();dragLevel=0;area.classList.remove('drag-over');const items=[...e.dataTransfer.items];if(items.some(item=>typeof item.getAsFileSystemHandle==='function')){const pending=items.filter(i=>i.kind==='file').map(i=>i.getAsFileSystemHandle());const handles=(await Promise.all(pending)).filter(Boolean);if(handles.length){await importHandles(handles);return;}}await importFiles([...e.dataTransfer.files]);});
 document.querySelector('.roots').addEventListener('keydown',e=>{const root=e.target.closest('[data-root]');if(root&&(e.key==='Enter'||e.key===' ')){e.preventDefault();void switchRoot(root.dataset.root,true);}});
 }

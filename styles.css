@@ -159,3 +159,16 @@
 .anno-copy:hover{background:var(--hover)}
 .anno-copy:disabled,.anno-save:disabled{opacity:.4;cursor:default}
 @media (max-width:880px){.item-size-wrap input[type="range"]{width:50px}.item-size-wrap .size-mark{display:none}}
+
+
+/* Reliability UX: explicit progress, cancellable operations and persistent failure details. */
+.fold-transfer-progress{position:fixed;right:18px;bottom:18px;z-index:90;width:min(440px,calc(100vw - 32px));max-height:55vh;overflow:auto;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:11px;padding:12px 14px;display:flex;align-items:flex-start;gap:12px;font-size:12px;line-height:1.5;color:var(--text)}
+.fold-transfer-progress[hidden]{display:none}
+.fold-transfer-progress .transfer-message{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fold-transfer-progress>button{flex:none;padding:4px 8px;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px}
+.fold-transfer-progress>button:hover{background:var(--hover);color:var(--text)}
+.fold-transfer-progress:has(details){flex-direction:column;gap:7px}
+.fold-transfer-progress .transfer-report-title{font-weight:650}
+.fold-transfer-progress details{width:100%;color:var(--muted)}
+.fold-transfer-progress details summary{cursor:pointer;user-select:none}
+.fold-transfer-progress ul{margin:8px 0 2px;padding-left:18px;overflow-wrap:anywhere;max-height:27vh;overflow:auto}

@@ -60,7 +60,7 @@ export function enhancePreview({$,svg,chosen,ext,act}) {
 }
 export function installV3(api){
   const {state,$,fileList,notify,svg,active,getSelected,selectIndex,ensurePermission,getDir,
-    uniqueName,copyEntry,isDescendantOf,refreshCurrent,chosen,act,ext,runTransfer}=api;
+    uniqueName,isDescendantOf,refreshCurrent,chosen,act,ext,runTransfer}=api;
   const left=$('sidebar-resizer'),right=$('preview-resizer');
   const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
   const railSetting=Number(localStorage.getItem('fold-rail-width'));

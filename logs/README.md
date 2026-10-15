@@ -6,6 +6,7 @@ Working memory for Fold: **plans, development notes, discussions, ideas, decisio
 
 - [ROADMAP.md](./ROADMAP.md) — living, prioritised plan and acceptance criteria.
 - [2026-10-15-project-notes.md](./2026-10-15-project-notes.md) — initial context, decisions, problems and candidate ideas.
+- [2026-10-15-reliability-pass.md](./2026-10-15-reliability-pass.md) — staged transfers, recoverable deletion, tests, known limits and next verification.
 
 ## How to use this folder
 

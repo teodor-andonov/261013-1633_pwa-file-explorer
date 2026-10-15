@@ -1,0 +1,14 @@
+{
+  "name": "fold-file-explorer",
+  "version": "0.5.0-dev",
+  "private": true,
+  "type": "module",
+  "description": "Local-first browser file explorer for Windows Chromium",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check app.js && node --check fold-v3.js && node --check file-ops.js && node --check sw.js && node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
